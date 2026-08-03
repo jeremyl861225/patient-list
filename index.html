@@ -124,6 +124,10 @@ main{padding:14px 0 96px}
 .pt.off .bar{background:var(--muted)}
 .pt .bd{flex:1;min-width:0}
 .pt .r1{display:flex;align-items:baseline;gap:8px;min-width:0}
+.bedno{font-family:var(--mono);font-size:12px;font-weight:700;letter-spacing:.02em;
+  background:var(--info-soft);color:var(--info);border-radius:6px;padding:2px 7px;flex:none;
+  align-self:center}
+.bedno.big{font-size:14px;padding:3px 9px;margin-right:2px}
 .pt .nm{font-weight:700;font-size:16px;letter-spacing:.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .pt .mrn{font-family:var(--mono);font-size:12.5px;color:var(--ink2);background:var(--bg2);
   border-radius:6px;padding:1px 6px;flex:none}
@@ -832,16 +836,16 @@ function cardHTML(p){
   const dayTag = d ? `<span class="tag ${p.status==='er'?'er':'d'}">${p.status==='er'?'來診':'住院'} ${fmtDate(d)}${n!=null?` · D${n}`:''}</span>` : '';
   const dc = p.dc_date ? `<span class="tag off">出院 ${fmtDate(p.dc_date)}</span>` : '';
   const npo = p.pi && p.pi.npo_since ? `<span class="tag warn">NPO ${fmtDate(p.pi.npo_since)}</span>` : '';
-  const bed = p.bed ? `<span class="tag info">${h(p.bed)}</span>` : '';
+  const bed = p.bed ? `<span class="bedno">${h(p.bed)}</span>` : '';
   const off = !p.tracking ? `<span class="tag off">已結束追蹤</span>` : '';
   const ax  = (p.assessment||[]).filter(Boolean);
   return `<button class="pt ${p.status==='er'?'er':''} ${p.tracking?'':'off'} ${p.pending_op?'op':''}" data-id="${p.id}">
     <i class="bar"></i>
     <span class="bd">
       ${p.pending_op?`<span class="r0">${opBadge(p)}</span>`:''}
-      <span class="r1"><span class="nm">${h(p.name)||'（未填姓名）'}</span><span class="mrn">${h(p.mrn)||'—'}</span></span>
+      <span class="r1">${bed}<span class="nm">${h(p.name)||'（未填姓名）'}</span><span class="mrn">${h(p.mrn)||'—'}</span></span>
       <span class="r2">${h(ageSexOf(p))||'<span class="vs">未填年齡性別</span>'}${p.vs?` <span class="vs">· VS ${h(p.vs)}</span>`:''}</span>
-      <span class="r3">${dayTag}${dc}${bed}${npo}${off}</span>
+      <span class="r3">${dayTag}${dc}${npo}${off}</span>
       ${ax.length?`<span class="ax">${h(ax.slice(0,2).join('；'))}</span>`:''}
     </span>
   </button>`;
@@ -1155,13 +1159,13 @@ function detailHTML(p){
   if(d) tags.push(`<span class="tag">${p.status==='er'?'來診':'住院'} ${d}${n!=null?` · D${n}`:''}</span>`);
   if(p.dc_date) tags.push(`<span class="tag off">出院 ${h(p.dc_date)}</span>`);
   if(p.status==='ward' && p.er_date && p.er_date!==p.adm_date) tags.push(`<span class="tag">來診 ${p.er_date}</span>`);
-  if(p.bed) tags.push(`<span class="tag info">${h(p.bed)}</span>`);
+
   if(p.pi && p.pi.npo_since) tags.push(`<span class="tag warn">NPO since ${h(p.pi.npo_since)}</span>`);
   if(!p.tracking) tags.push(`<span class="tag off">已結束追蹤</span>`);
 
   return `<div class="pdh">
     <div class="l1">
-      <span class="nm">${h(p.name)||'（未填姓名）'}</span>
+      ${p.bed?`<span class="bedno big">${h(p.bed)}</span>`:''}<span class="nm">${h(p.name)||'（未填姓名）'}</span>
       <button class="edt" data-edit="base" aria-label="編輯基本資料">${svgIcon(ICO.edit)}</button>
       <button class="iconbtn" data-pmenu aria-label="更多">
         <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="12" cy="19" r="1.8"/></svg></button>
@@ -1867,14 +1871,22 @@ function parseImport(text){
   let j;
   try{ j = JSON.parse(t); }
   catch(e){
+    // Safari 的錯誤訊息不給位置，所以直接把「收到什麼」攤開來給使用者看，
+    // 頭尾對不上就是複製不完整——這是貼上失敗最常見的原因。
+    const cut = s => s.replace(/\s+/g,' ').trim();
+    const lines = [];
     const m = /position (\d+)/.exec(e.message);
-    let near = '';
     if(m){
       const pos = +m[1];
-      near = '\n出錯的位置在第 '+pos+' 個字附近：…'+t.slice(Math.max(0,pos-30), pos+30).replace(/\n/g,' ')+'…';
+      lines.push('出錯位置在第 '+pos+' 個字附近：…'+cut(t.slice(Math.max(0,pos-30), pos+30))+'…');
     }
-    throw new Error('不是有效的 JSON：'+e.message+near+
-      '\n（最常見的原因是只複製到一部分，或用文書軟體開啟導致引號被換成彎引號。）');
+    lines.push('收到 '+t.length.toLocaleString()+' 個字');
+    lines.push('開頭：'+cut(t.slice(0,50))+'…');
+    lines.push('結尾：…'+cut(t.slice(-50)));
+    if(t[0] !== '{') lines.push('⚠ 開頭不是「{」——複製到的不是完整檔案。');
+    if(t[t.length-1] !== '}') lines.push('⚠ 結尾不是「}」——內容在中途被截斷了。');
+    lines.push('若一直失敗，用上面的「從檔案」直接選檔最保險，不會有複製不全的問題。');
+    throw new Error('不是有效的 JSON：'+e.message+'\n\n'+lines.join('\n'));
   }
   let arr = Array.isArray(j) ? j : (j.patients || (j.mrn||j.name ? [j] : null));
   if(!Array.isArray(arr)) throw new Error('找不到 patients 陣列');
@@ -2007,7 +2019,7 @@ function aboutSheet(){
 /* =========================================================================
  *  帳號 / 解鎖流程
  * ========================================================================= */
-const APPVER = '1.4.1';
+const APPVER = '1.4.2';
 function show(id){
   ['scr-setup','scr-auth','scr-lock','app'].forEach(x=> $('#'+x).classList.toggle('hide', x!==id));
 }
