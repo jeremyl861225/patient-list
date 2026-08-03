@@ -14,8 +14,8 @@
 - **待開刀註記**：一鍵標記（可附擬行術式／時間），卡片會排到最前面並亮出紅色標籤，工具列另有「待開刀」快速篩選。
 - **出院日期**：登記後住院天數算到出院當天為止，並可順手結束追蹤。
 - **結束追蹤**：不再追蹤的病人移到「已結束」分頁，**資料不刪除**，隨時可恢復。
-- **搜尋**：病歷號或姓名即時搜尋，另可用來診／住院日期區間篩選。
-- **病人卡片**：病歷號、姓名、年齡性別、VS（小字）、來診／住院日期與住院天數、床號、NPO 標記、Assessment 摘要。年齡純數字視為歲，未滿一歲直接填 `8m`、`20 days` 會原樣顯示。
+- **搜尋**：病歷號或姓名即時搜尋（三個分頁都有）；來診／住院日期的區間查詢只出現在「已結束」分頁——在追蹤中的病人清單通常不長，用不到日期。
+- **病人卡片**：床號、姓名、病歷號、年齡性別、VS 同一行，底下是 NPO／出院／已結束標記與 Assessment 摘要；來診日期與第幾天在卡片點開後才顯示。年齡純數字視為歲，未滿一歲直接填 `8m`、`20 days` 會原樣顯示。
 - **九個欄位**：Medical history／Present illness／Medication／Vital signs／Lab data／Image・Exam／Assessment／Plan／Note。
 - **Present illness 結構化輸入**：勾選症狀（發燒、噁心、嘔吐、腹痛〔可填位置與 persistent／intermittent／progressive／resolving〕、腹瀉、倦怠、嗜睡、血便、黑便、未解便、腹脹）並各自填天數，NPO since，以及十三項理學檢查（Murphy／McBurney／Rovsing／Obturator／Psoas／Carnett／CV knocking／Brudzinski／Kernig／腹部壓痛／反彈痛〔皆可填位置與 mild・moderate・severe〕／肌肉緊繃／腹壁僵硬）與 bowel sound。勾選後即時產生英文敘述。
 - **Medication**：藥名、途徑（PO／IV／IF）、劑量、頻率、hold 日期，IF 另有流速欄。

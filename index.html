@@ -123,7 +123,8 @@ main{padding:14px 0 96px}
 .pt.off{opacity:.66}
 .pt.off .bar{background:var(--muted)}
 .pt .bd{flex:1;min-width:0}
-.pt .r1{display:flex;align-items:baseline;gap:8px;min-width:0}
+.pt .r1{display:flex;align-items:baseline;gap:7px;min-width:0;flex-wrap:wrap;row-gap:2px}
+.pt .meta{font-size:12.5px;color:var(--ink2);white-space:nowrap}
 .bedno{font-family:var(--mono);font-size:12px;font-weight:700;letter-spacing:.02em;
   background:var(--info-soft);color:var(--info);border-radius:6px;padding:2px 7px;flex:none;
   align-self:center}
@@ -131,8 +132,7 @@ main{padding:14px 0 96px}
 .pt .nm{font-weight:700;font-size:16px;letter-spacing:.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .pt .mrn{font-family:var(--mono);font-size:12.5px;color:var(--ink2);background:var(--bg2);
   border-radius:6px;padding:1px 6px;flex:none}
-.pt .r2{display:flex;flex-wrap:wrap;align-items:center;gap:7px;margin-top:4px;font-size:12.5px;color:var(--ink2)}
-.pt .vs{font-size:11.5px;color:var(--muted)}
+.pt .vs{color:var(--muted)}
 .pt .r3{display:flex;flex-wrap:wrap;gap:6px;margin-top:7px}
 .pt .ax{margin-top:7px;font-size:12.5px;color:var(--muted);overflow:hidden;
   display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;word-break:break-word}
@@ -512,7 +512,7 @@ table.gt td.na{color:#C6BCA9}
             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
           </button>
         </div>
-        <div class="drange">
+        <div class="drange hide" id="drange">
           <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>
           <input id="d1" type="date" aria-label="起始日"><span>–</span><input id="d2" type="date" aria-label="結束日">
         </div>
@@ -811,7 +811,7 @@ function filtered(){
     else { if(!p.tracking || p.status!==ST.tab) return false; }
     if(ST.opOnly && !p.pending_op) return false;
     if(q && !((p.mrn||'').toLowerCase().includes(q) || (p.name||'').toLowerCase().includes(q))) return false;
-    if(ST.d1 || ST.d2){
+    if(ST.tab==='off' && (ST.d1 || ST.d2)){
       const d = admitDateOf(p);
       if(!d) return false;
       if(ST.d1 && d < ST.d1) return false;
@@ -832,8 +832,6 @@ function opBadge(p, big){
     p.op_note?`<em>${h(p.op_note)}</em>`:''}</span>`;
 }
 function cardHTML(p){
-  const d = admitDateOf(p), n = dayNo(p);
-  const dayTag = d ? `<span class="tag ${p.status==='er'?'er':'d'}">${p.status==='er'?'來診':'住院'} ${fmtDate(d)}${n!=null?` · D${n}`:''}</span>` : '';
   const dc = p.dc_date ? `<span class="tag off">出院 ${fmtDate(p.dc_date)}</span>` : '';
   const npo = p.pi && p.pi.npo_since ? `<span class="tag warn">NPO ${fmtDate(p.pi.npo_since)}</span>` : '';
   const bed = p.bed ? `<span class="bedno">${h(p.bed)}</span>` : '';
@@ -843,9 +841,9 @@ function cardHTML(p){
     <i class="bar"></i>
     <span class="bd">
       ${p.pending_op?`<span class="r0">${opBadge(p)}</span>`:''}
-      <span class="r1">${bed}<span class="nm">${h(p.name)||'（未填姓名）'}</span><span class="mrn">${h(p.mrn)||'—'}</span></span>
-      <span class="r2">${h(ageSexOf(p))||'<span class="vs">未填年齡性別</span>'}${p.vs?` <span class="vs">· VS ${h(p.vs)}</span>`:''}</span>
-      <span class="r3">${dayTag}${dc}${npo}${off}</span>
+      <span class="r1">${bed}<span class="nm">${h(p.name)||'（未填姓名）'}</span><span class="mrn">${h(p.mrn)||'—'}</span>
+        <span class="meta">${h(ageSexOf(p))}${p.vs?`<span class="vs"> · VS ${h(p.vs)}</span>`:''}</span></span>
+      ${(dc||npo||off)?`<span class="r3">${dc}${npo}${off}</span>`:''}
       ${ax.length?`<span class="ax">${h(ax.slice(0,2).join('；'))}</span>`:''}
     </span>
   </button>`;
@@ -864,6 +862,7 @@ function renderList(){
   } else {
     box.innerHTML = `<div class="cards">${rows.map(cardHTML).join('')}</div>`;
   }
+  $('#drange').classList.toggle('hide', ST.tab !== 'off');   // 日期查詢只在「已結束」用得到
   $('#f-clear').classList.toggle('hide', !(ST.q||ST.d1||ST.d2||ST.opOnly));
   $('#op-only').setAttribute('aria-pressed', ST.opOnly?'true':'false');
   $('#q-clear').classList.toggle('hide', !ST.q);
@@ -2019,7 +2018,7 @@ function aboutSheet(){
 /* =========================================================================
  *  帳號 / 解鎖流程
  * ========================================================================= */
-const APPVER = '1.4.2';
+const APPVER = '1.5.0';
 function show(id){
   ['scr-setup','scr-auth','scr-lock','app'].forEach(x=> $('#'+x).classList.toggle('hide', x!==id));
 }
@@ -2284,7 +2283,9 @@ $('#lk-signout').onclick = async ()=>{ if(sb) await sb.auth.signOut(); show('scr
 
 $('#nav').addEventListener('click', e=>{
   const b = e.target.closest('[data-tab]'); if(!b) return;
-  ST.tab = b.dataset.tab; localStorage.setItem(LS.tab, ST.tab); renderList();
+  ST.tab = b.dataset.tab; localStorage.setItem(LS.tab, ST.tab);
+  if(ST.tab !== 'off'){ ST.d1=''; ST.d2=''; $('#d1').value=''; $('#d2').value=''; }
+  renderList();
 });
 $('#list').addEventListener('click', e=>{
   const b = e.target.closest('[data-id]'); if(!b) return;
