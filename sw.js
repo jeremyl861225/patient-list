@@ -43,6 +43,21 @@ self.addEventListener('activate', e=>{
   })());
 });
 
+/* 頁面按「下拉更新」發現有新版本時，叫我們把外殼整包重抓一次，
+ * 這樣它接著 reload 才會拿到新版，而不是又吃到舊快取。 */
+self.addEventListener('message', e=>{
+  if(e.data !== 'REFRESH_SHELL') return;
+  const reply = p => { if(e.ports && e.ports[0]) e.ports[0].postMessage(p); };
+  e.waitUntil((async ()=>{
+    try{
+      const c = await caches.open(CACHE);
+      await Promise.all(PRECACHE.map(u =>
+        c.add(new Request(u, {cache:'reload'})).catch(()=>{})));
+      reply('ok');
+    }catch(err){ reply('fail'); }
+  })());
+});
+
 const scopePath = new URL(self.registration.scope).pathname;
 
 self.addEventListener('fetch', e=>{
