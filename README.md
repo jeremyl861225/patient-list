@@ -97,5 +97,6 @@ schema.sql                  Supabase 資料表與 RLS
 SETUP.md                    建立 Supabase 專案的步驟
 tools/rawtext_to_import.py  raw data → 匯入用 JSON
 tools/README.md             匯入格式規格
+.claude/skills/             patient-list-import skill（Claude 轉檔時的作業規則）
 vendor/                     supabase-js（放本機，離線與院內網路都開得起來）
 ```
