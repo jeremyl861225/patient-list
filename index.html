@@ -767,8 +767,11 @@ function renderList(){
   const box = $('#list');
   if(!rows.length){
     const anyFilter = ST.q || ST.d1 || ST.d2;
-    box.innerHTML = `<div class="empty"><b>${anyFilter?'查無符合條件的病人':'這裡還沒有病人'}</b>${
-      anyFilter?'換個病歷號、姓名或日期範圍試試。':'按右下角「新增病人」開始，或從選單匯入資料。'}</div>`;
+    const blank = ST.tab==='off'
+      ? ['沒有已結束追蹤的病人', '在病人資料頁按「⋮ → 結束追蹤」，病人會移到這裡，資料保留。']
+      : ['這裡還沒有病人', '按右下角「新增病人」開始，或從選單匯入資料。'];
+    box.innerHTML = `<div class="empty"><b>${anyFilter?'查無符合條件的病人':blank[0]}</b>${
+      anyFilter?'換個病歷號、姓名或日期範圍試試。':blank[1]}</div>`;
   } else {
     box.innerHTML = `<div class="cards">${rows.map(cardHTML).join('')}</div>`;
   }
@@ -1487,12 +1490,20 @@ function pasteLabs(L, paint){
         let n = 0;
         txt.split('\n').forEach(line=>{
           const s = line.trim(); if(!s) return;
-          const m = s.match(/^(.+?)[\s:：]+(-?\d+(?:\.\d+)?)\s*([A-Za-zµ%\/\^\d]*)?\s*(H|L)?$/);
+          // 「項目 數值 [單位] [H/L]」——先剝掉結尾的 H/L 旗標，剩下的才是單位
+          const m = s.match(/^(.+?)[\s:：]+(-?\d+(?:\.\d+)?)\s*(.*)$/);
           if(!m) return;
-          const name = m[1].trim(), val = m[2], unit = (m[3]||'').trim(), flag = m[4]||'';
+          const val = m[2];
+          let tail = (m[3]||'').trim(), flag = '';
+          const mf = tail.match(/(?:^|\s)(H|L|\*)$/);
+          if(mf){ flag = mf[1]==='*' ? '' : mf[1]; tail = tail.slice(0, mf.index).trim(); }
+          let name = m[1].trim(), unit = tail;
+          const mu = name.match(/^(.*?)\s*[（(]\s*([^)）]+)\s*[)）]$/);   // 單位寫在名稱後的括號裡
+          if(mu){ name = mu[1].trim(); if(!unit) unit = mu[2].trim(); }
+          if(!name) return;
           if(!L.items.some(x=>x.name===name)) L.items.push({name, unit});
           else if(unit){ const it = L.items.find(x=>x.name===name); if(!it.unit) it.unit = unit; }
-          L.vals[name+'|'+col] = val + (flag?' '+flag:'');
+          L.vals[name+'|'+col] = (val + (flag?' '+flag:'')).trim();
           n++;
         });
         if(!L.cols.includes(col)) L.cols.push(col);
