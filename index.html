@@ -3,8 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="theme-color" content="#F3EDE0">
-<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#F3EDE0" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#191714" media="(prefers-color-scheme: dark)">
+<meta name="color-scheme" content="light dark">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Patient List">
@@ -441,6 +442,47 @@ table.gt td.na{color:#C6BCA9}
   z-index:80;background:#3B352C;color:#F6F1E6;font-size:13.5px;padding:10px 16px;border-radius:999px;
   box-shadow:var(--sh-2);animation:fade .14s ease;max-width:88vw;text-align:center}
 .toast.bad{background:#7A3529}
+/* ---------- 夜覽：跟著系統配色，不另外做開關 ---------- */
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#191714; --bg2:#231F1A; --card:#211D18; --card2:#1C1915;
+    --line:#3A342C; --line-soft:#2C2721;
+    --ink:#EDE6D9; --ink2:#BFB6A5; --muted:#8C8375;
+    --accent:#7FA98C; --accent-ink:#A9CAB3; --accent-soft:#25332A;
+    --hot:#CE8A60; --hot-ink:#E5AF8A; --hot-soft:#3A2A1F;
+    --info:#86A9C7; --info-soft:#22303B;
+    --danger:#D5705F; --danger-soft:#3A2320;
+    --sh-1:0 1px 2px rgba(0,0,0,.35);
+    --sh-2:0 2px 4px rgba(0,0,0,.3), 0 10px 28px rgba(0,0,0,.4);
+    --sh-3:0 18px 60px rgba(0,0,0,.6);
+    color-scheme:dark;
+  }
+  header.top{background:rgba(25,23,20,.94)}
+  .iconbtn:hover,.pt:hover,.addrow:hover{border-color:#4A4238}
+  .pill.warn{border-color:#4A3427}
+  .pt.op{border-color:#6A4238;background:linear-gradient(180deg,#2C201C 0%,var(--card) 46%)}
+  .pt.op:hover{border-color:#7E4E42}
+  .tag.off{background:#2A2621;color:#948B7C}
+  .med .rt.if{background:#2E2836;color:#B9A6CC}
+  .btn.dang{border-color:#5A3A34}
+  .btn.dang:hover{background:#4A2F2A}
+  .del:hover{border-color:#5A3A34}
+  .err{border-color:#5A3A34}
+  .ok{border-color:#3A4C3F}
+  .ov{background:rgba(0,0,0,.62)}
+  .toast{background:#E8E0D2;color:#231F1A}
+  .toast.bad{background:#D5705F;color:#1A1512}
+  .tscroll::-webkit-scrollbar-thumb{background:#433C33}
+  .othr{text-decoration-color:#4E6656}
+  .inp::placeholder{color:#6E665A}
+  .opb{box-shadow:0 1px 3px rgba(0,0,0,.5)}
+  select.inp{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238C8375' stroke-width='2.4' stroke-linecap='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")}
+  /* 強調色在深色模式下變亮，壓在上面的文字要改成深色才看得清楚 */
+  .fab,.btn.pri,.chip.on,.seg button.on,.tbtn[aria-pressed="true"]{color:#17140F}
+  .opb{color:#1A1512}
+  .ckbox.on svg{color:#17140F}
+  .fab{box-shadow:0 6px 20px rgba(0,0,0,.5)}
+}
 </style>
 </head>
 <body>
@@ -763,6 +805,8 @@ function ageText(a){
   return /^\d+(\.\d+)?$/.test(t) ? t+' y/o' : t;
 }
 const ageSexOf = p => [ageText(p.age), p.sex==='M'?'Male':p.sex==='F'?'Female':''].filter(Boolean).join(' ');
+/* 卡片上用縮寫：53M、73F、8mF——一行要塞得下床號姓名病歷號 */
+const ageShort = p => (String(p.age==null?'':p.age).trim() + (p.sex==='M'?'M':p.sex==='F'?'F':'')) || '';
 
 /* ---------------- 敘述產生 ---------------- */
 function piNarrative(pi){
@@ -863,7 +907,7 @@ function cardHTML(p){
     <span class="bd">
       ${p.pending_op?`<span class="r0">${opBadge(p)}</span>`:''}
       <span class="r1">${bed}<span class="nm">${h(p.name)||'（未填姓名）'}</span><span class="mrn">${h(p.mrn)||'—'}</span>
-        <span class="meta">${h(ageSexOf(p))}${p.vs?`<span class="vs"> · VS ${h(p.vs)}</span>`:''}</span></span>
+        <span class="meta">${h(ageShort(p))}${p.vs?`<span class="vs"> · VS ${h(p.vs)}</span>`:''}</span></span>
       ${(dc||npo||off)?`<span class="r3">${dc}${npo}${off}</span>`:''}
       ${ax.length?`<span class="ax">${h(ax.slice(0,2).join('；'))}</span>`:''}
     </span>
@@ -2069,7 +2113,7 @@ function aboutSheet(){
 /* =========================================================================
  *  帳號 / 解鎖流程
  * ========================================================================= */
-const APPVER = '1.6.0';
+const APPVER = '1.7.0';
 function show(id){
   ['scr-setup','scr-auth','scr-lock','app'].forEach(x=> $('#'+x).classList.toggle('hide', x!==id));
 }
