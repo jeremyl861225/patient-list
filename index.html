@@ -1846,9 +1846,36 @@ function mergePatient(dst, src){
   }
   return dst;
 }
+/* 貼上來的內容常常被中途的 App 動過手腳：BOM、零寬字元、被自動轉成彎引號、
+   前後包了 ``` 之類。這裡先洗乾淨再交給 JSON.parse。 */
+function cleanJSONText(raw){
+  let t = String(raw||'')
+    .replace(/^﻿/, '')
+    .replace(/[​-‍⁠]/g, '')
+    .replace(/[“”„‟]/g, '"')
+    .replace(/[‘’‚‛]/g, "'")
+    .replace(/ /g, ' ')
+    .trim();
+  t = t.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+  const i = t.indexOf('{'), j = t.lastIndexOf('}');
+  if(i > 0 && j > i) t = t.slice(i, j+1);          // 前後夾了說明文字
+  return t;
+}
 function parseImport(text){
+  const t = cleanJSONText(text);
+  if(!t) throw new Error('內容是空的——請確認整份都複製到了（含開頭的 { 與結尾的 }）。');
   let j;
-  try{ j = JSON.parse(text); }catch(e){ throw new Error('不是有效的 JSON：'+e.message); }
+  try{ j = JSON.parse(t); }
+  catch(e){
+    const m = /position (\d+)/.exec(e.message);
+    let near = '';
+    if(m){
+      const pos = +m[1];
+      near = '\n出錯的位置在第 '+pos+' 個字附近：…'+t.slice(Math.max(0,pos-30), pos+30).replace(/\n/g,' ')+'…';
+    }
+    throw new Error('不是有效的 JSON：'+e.message+near+
+      '\n（最常見的原因是只複製到一部分，或用文書軟體開啟導致引號被換成彎引號。）');
+  }
   let arr = Array.isArray(j) ? j : (j.patients || (j.mrn||j.name ? [j] : null));
   if(!Array.isArray(arr)) throw new Error('找不到 patients 陣列');
   return arr;
@@ -1908,13 +1935,18 @@ function importSheet(){
         r.readAsText(file);
       };
       ov.querySelector('[data-ok]').onclick = async ()=>{
+        const m = ov.querySelector('#im-msg');
+        const btn = ov.querySelector('[data-ok]');
         try{
           const arr = parseImport(t.value);
+          btn.disabled = true; btn.textContent = '匯入中…';
+          await doImport(arr);          // 先匯完再關，中途失敗才看得到訊息
           close();
-          await doImport(arr);
         }catch(e){
-          const m = ov.querySelector('#im-msg');
-          m.className='err'; m.textContent = e.message;
+          m.className = 'err';
+          m.style.whiteSpace = 'pre-wrap';
+          m.textContent = e.message;
+          btn.disabled = false; btn.textContent = '匯入';
         }
       };
     }
@@ -1975,7 +2007,7 @@ function aboutSheet(){
 /* =========================================================================
  *  帳號 / 解鎖流程
  * ========================================================================= */
-const APPVER = '1.4.0';
+const APPVER = '1.4.1';
 function show(id){
   ['scr-setup','scr-auth','scr-lock','app'].forEach(x=> $('#'+x).classList.toggle('hide', x!==id));
 }
