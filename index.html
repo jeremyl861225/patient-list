@@ -329,6 +329,10 @@ table.gt thead th{background:var(--card2);font-size:11.5px;font-weight:700;color
 table.gt tbody tr:last-child td{border-bottom:none}
 table.gt .stick{position:sticky;left:0;background:var(--card);z-index:1;
   box-shadow:1px 0 0 var(--line-soft);font-weight:600}
+/* 第一欄限寬：eGFR CKD-EPI (mL/min/1.73m^2) 這種長名稱會把整張表推出畫面，
+ * 檢驗有五十幾列，所以不折行改成單行截斷——項目名稱先被看到，單位才被切，
+ * 完整文字放在 title 裡。數值欄不受影響。 */
+table.gt tbody td.stick{max-width:min(42vw,168px);overflow:hidden;text-overflow:ellipsis}
 table.gt thead .stick{background:var(--card2);z-index:3}
 table.gt tbody tr:nth-child(even) td{background:var(--card2)}
 table.gt tbody tr:nth-child(even) .stick{background:var(--card2)}
@@ -1320,8 +1324,9 @@ function labsHTML(p){
     <thead><tr><th class="stick">檢驗項目</th>${cols.map(c=>`<th>${h(c)}</th>`).join('')}</tr></thead>
     <tbody>${L.items.map(it=>{
       const ref = labRefOf(it, p.sex);
+      const full = it.name + (it.unit?' ('+it.unit+')':'');
       return `<tr>
-      <td class="stick">${h(it.name)}${it.unit?`<span class="u">${h(it.unit)}</span>`:''}</td>
+      <td class="stick" title="${h(full)}">${h(it.name)}${it.unit?`<span class="u">${h(it.unit)}</span>`:''}</td>
       ${cols.map(c=>labCell(L.vals[it.name+'|'+c], ref)).join('')}
     </tr>`;}).join('')}</tbody></table></div>`;
 }
@@ -2292,7 +2297,7 @@ function aboutSheet(){
 /* =========================================================================
  *  帳號 / 解鎖流程
  * ========================================================================= */
-const APPVER = '1.8.1';
+const APPVER = '1.8.2';
 function show(id){
   ['scr-setup','scr-auth','scr-lock','app'].forEach(x=> $('#'+x).classList.toggle('hide', x!==id));
 }
