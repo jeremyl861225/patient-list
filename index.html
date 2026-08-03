@@ -796,7 +796,7 @@ const LAB_REF = [
   {a:['fibrinogen'],                        u:['mg/dl'], lo:200, hi:400, src:'std'},
   /* --- 生化 --- */
   {a:['glu','glucose','ac','sugar','血糖'], u:['mg/dl'], lo:70, hi:99, src:'std'},
-  {a:['bun','ureanitrogen'],                u:['mg/dl'], lo:6, hi:24, src:'ntuh'},
+  {a:['bun','un','ureanitrogen'], n:'BUN／UN',u:['mg/dl'], lo:6, hi:24, src:'ntuh'},
   {a:['cre','cr','creatinine','肌酸酐'],    u:['mg/dl'], lo:0.5, hi:1.4, src:'ntuh'},
   {a:['ua','uricacid','尿酸'],              u:['mg/dl'], M:[3.5,7.2], F:[2.6,6.0], src:'std'},
   {a:['na','sodium'],                       u:['mmol/l','meq/l'], lo:135, hi:145, src:'std'},
@@ -2292,7 +2292,7 @@ function aboutSheet(){
 /* =========================================================================
  *  帳號 / 解鎖流程
  * ========================================================================= */
-const APPVER = '1.8.0';
+const APPVER = '1.8.1';
 function show(id){
   ['scr-setup','scr-auth','scr-lock','app'].forEach(x=> $('#'+x).classList.toggle('hide', x!==id));
 }
