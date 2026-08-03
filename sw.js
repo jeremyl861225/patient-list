@@ -10,7 +10,7 @@
  *   - precache 逐一 add，單一檔案缺漏不會讓整個安裝失敗
  */
 const PREFIX = 'patient-list-';
-const CACHE  = PREFIX + 'v2';   // v2：換 icon
+const CACHE  = PREFIX + 'v3';   // v3：檢驗值自動判讀
 
 const PRECACHE = [
   './',
