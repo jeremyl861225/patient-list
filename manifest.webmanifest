@@ -1,0 +1,17 @@
+{
+  "name": "Patient List",
+  "short_name": "Patients",
+  "description": "急診／住院病人清單，端對端加密、跨裝置同步",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#F3EDE0",
+  "theme_color": "#F3EDE0",
+  "lang": "zh-Hant",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

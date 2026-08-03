@@ -1,0 +1,1917 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#F3EDE0">
+<meta name="color-scheme" content="light">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Patient List">
+<meta name="robots" content="noindex, nofollow">
+<title>Patient List</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" href="icon-192.png">
+<!-- 放在本機而不是 CDN：離線時開得起來，醫院網路擋外部 CDN 時也不受影響 -->
+<script src="vendor/supabase-2.111.0.min.js"></script>
+<style>
+:root{
+  --bg:#F3EDE0; --bg2:#EAE2D1; --card:#FFFCF6; --card2:#FBF6EB;
+  --line:#E2D8C4; --line-soft:#EFE7D8;
+  --ink:#2E2A23; --ink2:#5F594C; --muted:#978E7E;
+  --accent:#4E6B57; --accent-ink:#3C5344; --accent-soft:#E4EDE5;
+  --hot:#B0603A; --hot-ink:#7E432A; --hot-soft:#F6E7DE;
+  --info:#41627E; --info-soft:#E2EAF1;
+  --danger:#A9483C; --danger-soft:#F5E2DE;
+  --r-lg:16px; --r-md:12px; --r-sm:9px;
+  --sh-1:0 1px 2px rgba(78,64,40,.07);
+  --sh-2:0 2px 4px rgba(78,64,40,.06), 0 10px 28px rgba(78,64,40,.09);
+  --sh-3:0 18px 60px rgba(60,48,28,.22);
+  --font:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans TC","PingFang TC","Microsoft JhengHei",system-ui,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+/* 固定版面：頁寬＝版面寬，不讓手指縮放（雙指捏合、連點兩下都不放大） */
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%;touch-action:pan-x pan-y}
+body{touch-action:pan-x pan-y}
+body{
+  background:var(--bg); color:var(--ink); font-family:var(--font);
+  font-size:15px; line-height:1.55; letter-spacing:.01em;
+  -webkit-font-smoothing:antialiased; min-height:100vh; overflow-x:hidden;
+}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer;border:none;background:none}
+a{color:var(--accent-ink)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:6px}
+.hide{display:none !important}
+.mono{font-family:var(--mono);letter-spacing:.01em}
+
+/* ---------- shell ---------- */
+.wrap{max-width:1180px;margin:0 auto;padding:0 14px}
+header.top{
+  position:sticky; top:0; z-index:40;
+  background:rgba(243,237,224,.94); backdrop-filter:saturate(1.4) blur(10px);
+  border-bottom:1px solid var(--line-soft); padding-top:env(safe-area-inset-top);
+}
+.top-in{display:flex;align-items:center;gap:10px;min-height:54px}
+.brand{display:flex;align-items:center;gap:8px;font-weight:700;letter-spacing:.02em;font-size:16px;white-space:nowrap}
+.brand svg{width:19px;height:19px;color:var(--accent);flex:none}
+.top-sp{flex:1}
+.pill{
+  display:inline-flex;align-items:center;gap:6px;height:27px;padding:0 10px;border-radius:999px;
+  background:var(--card);border:1px solid var(--line);font-size:11.5px;color:var(--ink2);white-space:nowrap;
+}
+.pill .dot{width:7px;height:7px;border-radius:50%;background:var(--accent);flex:none}
+.pill.warn{background:var(--hot-soft);border-color:#EBD3C4;color:var(--hot-ink)}
+.pill.warn .dot{background:var(--hot)}
+.iconbtn{
+  width:34px;height:34px;border-radius:50%;display:grid;place-items:center;
+  border:1px solid var(--line);background:var(--card);color:var(--ink2);
+  transition:background .15s,border-color .15s;flex:none;
+}
+.iconbtn:hover{background:var(--card2);border-color:#D6CAB2}
+.iconbtn svg{width:17px;height:17px}
+
+.nav{display:flex;gap:4px;background:var(--bg2);border:1px solid var(--line-soft);border-radius:999px;padding:4px;margin:12px 0 0}
+.nav button{
+  flex:1;height:34px;padding:0 10px;border-radius:999px;font-size:14px;font-weight:600;
+  color:var(--ink2);display:flex;align-items:center;justify-content:center;gap:6px;
+  transition:background .18s,color .18s,box-shadow .18s;white-space:nowrap;
+}
+.nav button.on{background:var(--card);color:var(--accent-ink);box-shadow:var(--sh-1)}
+.nav button .n{font-size:11px;font-weight:600;background:var(--bg2);border-radius:999px;padding:0 6px;color:var(--muted)}
+.nav button.on .n{background:var(--accent-soft);color:var(--accent-ink)}
+
+main{padding:14px 0 96px}
+
+/* ---------- 搜尋列 ---------- */
+.tools{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:0 0 14px}
+.search{
+  flex:1;min-width:190px;display:flex;align-items:center;gap:8px;height:40px;padding:0 12px;
+  background:var(--card);border:1px solid var(--line);border-radius:999px;box-shadow:var(--sh-1);
+}
+.search svg{width:16px;height:16px;color:var(--muted);flex:none}
+.search input{flex:1;min-width:0;border:none;background:none;outline:none;font-size:14.5px}
+.search button{color:var(--muted);display:grid;place-items:center;padding:2px}
+.drange{display:flex;align-items:center;gap:6px;height:40px;padding:0 12px;background:var(--card);
+  border:1px solid var(--line);border-radius:999px;box-shadow:var(--sh-1);font-size:12.5px;color:var(--muted)}
+.drange input{border:none;background:none;outline:none;font-size:13px;color:var(--ink2);width:118px;min-width:0}
+.drange span{color:var(--muted)}
+.tbtn{border:1px solid var(--line);background:var(--card);border-radius:999px;height:40px;padding:0 14px;
+  font-size:13.5px;color:var(--ink2);box-shadow:var(--sh-1);display:inline-flex;align-items:center;gap:6px}
+.tbtn:hover{background:var(--card2)}
+.tbtn svg{width:15px;height:15px}
+
+/* ---------- 病人卡 ---------- */
+.cards{display:grid;gap:10px}
+@media(min-width:720px){.cards{grid-template-columns:repeat(2,1fr)}}
+@media(min-width:1060px){.cards{grid-template-columns:repeat(3,1fr)}}
+
+.pt{
+  width:100%;text-align:left;background:var(--card);border:1px solid var(--line);border-radius:var(--r-md);
+  padding:12px 13px;display:flex;gap:11px;align-items:stretch;box-shadow:var(--sh-1);
+  transition:transform .12s,box-shadow .18s,border-color .18s;min-width:0;
+}
+.pt:hover{box-shadow:var(--sh-2);border-color:#D6CAB2;transform:translateY(-1px)}
+.pt:active{transform:translateY(0)}
+.pt .bar{width:3.5px;border-radius:3px;background:var(--accent);flex:none}
+.pt.er .bar{background:var(--hot)}
+.pt.off{opacity:.66}
+.pt.off .bar{background:var(--muted)}
+.pt .bd{flex:1;min-width:0}
+.pt .r1{display:flex;align-items:baseline;gap:8px;min-width:0}
+.pt .nm{font-weight:700;font-size:16px;letter-spacing:.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pt .mrn{font-family:var(--mono);font-size:12.5px;color:var(--ink2);background:var(--bg2);
+  border-radius:6px;padding:1px 6px;flex:none}
+.pt .r2{display:flex;flex-wrap:wrap;align-items:center;gap:7px;margin-top:4px;font-size:12.5px;color:var(--ink2)}
+.pt .vs{font-size:11.5px;color:var(--muted)}
+.pt .r3{display:flex;flex-wrap:wrap;gap:6px;margin-top:7px}
+.pt .ax{margin-top:7px;font-size:12.5px;color:var(--muted);overflow:hidden;
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;word-break:break-word}
+.tag{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;line-height:1;padding:4px 8px;
+  border-radius:999px;background:var(--bg2);color:var(--ink2);white-space:nowrap}
+.tag.d{background:var(--accent-soft);color:var(--accent-ink);font-weight:600}
+.tag.er{background:var(--hot-soft);color:var(--hot-ink);font-weight:600}
+.tag.info{background:var(--info-soft);color:var(--info)}
+.tag.off{background:#EDE9E1;color:#8A8172}
+.tag.warn{background:var(--danger-soft);color:var(--danger);font-weight:600}
+
+.empty{text-align:center;color:var(--muted);font-size:13.5px;padding:40px 20px;
+  border:1px dashed var(--line);border-radius:var(--r-lg);background:var(--card2)}
+.empty b{display:block;color:var(--ink2);font-size:15px;margin-bottom:5px;font-weight:600}
+
+/* ---------- FAB ---------- */
+.fab{
+  position:fixed;right:max(16px,env(safe-area-inset-right));
+  bottom:calc(20px + env(safe-area-inset-bottom));z-index:45;height:50px;padding:0 20px 0 17px;
+  border-radius:999px;background:var(--accent);color:#fff;font-weight:600;font-size:14.5px;
+  display:flex;align-items:center;gap:8px;box-shadow:0 6px 20px rgba(48,72,56,.32);
+  transition:transform .14s,box-shadow .18s;
+}
+.fab:hover{transform:translateY(-1px);box-shadow:0 10px 26px rgba(48,72,56,.38)}
+.fab svg{width:18px;height:18px}
+
+/* ---------- modal / sheet ---------- */
+.ov{position:fixed;inset:0;z-index:60;background:rgba(48,40,26,.42);backdrop-filter:blur(3px);
+  display:flex;align-items:flex-end;justify-content:center;padding:0;animation:fade .16s ease}
+@media(min-width:640px){.ov{align-items:center;padding:24px}}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+@keyframes rise{from{transform:translateY(22px);opacity:.4}to{transform:none;opacity:1}}
+.sheet{background:var(--card);width:100%;max-width:600px;border-radius:18px 18px 0 0;box-shadow:var(--sh-3);
+  display:flex;flex-direction:column;max-height:94vh;max-height:94dvh;
+  animation:rise .2s cubic-bezier(.2,.7,.3,1);overflow:hidden}
+.sheet.wide{max-width:860px}
+@media(min-width:640px){.sheet{border-radius:var(--r-lg);max-height:88vh}}
+.sh-h{display:flex;align-items:center;gap:10px;padding:14px 15px 11px;border-bottom:1px solid var(--line-soft);
+  background:var(--card2);flex:none}
+.sh-h h2{margin:0;font-size:16.5px;font-weight:700;flex:1;min-width:0;word-break:break-word;line-height:1.35}
+.sh-h .sub{display:block;font-size:12px;color:var(--muted);font-weight:500;margin-top:2px}
+.sh-b{padding:15px;overflow-y:auto;flex:1;-webkit-overflow-scrolling:touch}
+.sh-f{padding:11px 15px calc(11px + env(safe-area-inset-bottom));border-top:1px solid var(--line-soft);
+  display:flex;gap:9px;background:var(--card2);flex:none;align-items:center}
+.sh-f .sp{flex:1}
+
+.btn{height:40px;padding:0 18px;border-radius:var(--r-sm);font-size:14.5px;font-weight:600;
+  border:1px solid var(--line);background:var(--card);color:var(--ink2);display:inline-flex;
+  align-items:center;justify-content:center;gap:7px;transition:background .15s,border-color .15s}
+.btn:hover{background:var(--bg2)}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.pri:hover{background:var(--accent-ink)}
+.btn.dang{color:var(--danger);border-color:#E7CFC9;background:var(--danger-soft)}
+.btn.dang:hover{background:#EFD6D0}
+.btn.sm{height:32px;padding:0 12px;font-size:13px}
+.btn svg{width:16px;height:16px}
+.btn:disabled{opacity:.5;cursor:default}
+
+/* ---------- 表單 ---------- */
+.field{margin:0 0 13px}
+.field:last-child{margin-bottom:0}
+.lab{display:block;font-size:12.5px;font-weight:600;color:var(--ink2);margin:0 0 5px;letter-spacing:.02em}
+.lab .op{font-weight:500;color:var(--muted)}
+.inp,select.inp,textarea.inp{
+  width:100%;height:40px;padding:0 11px;border-radius:var(--r-sm);border:1px solid var(--line);
+  background:var(--card2);outline:none;font-size:15px;transition:border-color .15s,background .15s;
+}
+textarea.inp{height:auto;min-height:84px;padding:9px 11px;line-height:1.55;resize:vertical}
+select.inp{-webkit-appearance:none;appearance:none;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23978E7E' stroke-width='2.4' stroke-linecap='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 9px center;background-size:15px;padding-right:30px}
+.inp:focus{border-color:var(--accent);background:var(--card)}
+.inp::placeholder{color:#B9B0A0}
+.row{display:flex;gap:9px}
+.row>*{flex:1;min-width:0}
+.row.t3>*{flex:1}
+.hintline{font-size:12px;color:var(--muted);margin:6px 0 0;line-height:1.5}
+.err{background:var(--danger-soft);border:1px solid #E7CFC9;color:var(--danger);border-radius:var(--r-sm);
+  padding:9px 11px;font-size:13px;margin:0 0 12px;line-height:1.5}
+.ok{background:var(--accent-soft);border:1px solid #CFE0D2;color:var(--accent-ink);border-radius:var(--r-sm);
+  padding:9px 11px;font-size:13px;margin:0 0 12px;line-height:1.5}
+
+/* 分段選擇 */
+.seg{display:flex;gap:0;border:1px solid var(--line);border-radius:var(--r-sm);overflow:hidden;background:var(--card2)}
+.seg button{flex:1;height:38px;font-size:13.5px;font-weight:600;color:var(--ink2);border-right:1px solid var(--line-soft)}
+.seg button:last-child{border-right:none}
+.seg button.on{background:var(--accent);color:#fff}
+.seg.hot button.on{background:var(--hot)}
+.seg.tri button.on.neg{background:var(--muted)}
+
+/* chips 選擇 */
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{border:1px solid var(--line);background:var(--card2);border-radius:999px;padding:5px 11px;font-size:12.5px;
+  color:var(--ink2);transition:background .14s,border-color .14s}
+.chip.on{background:var(--accent);border-color:var(--accent);color:#fff}
+
+/* ---------- 病人明細 ---------- */
+.pdh{padding:13px 15px;background:var(--card2);border-bottom:1px solid var(--line-soft);flex:none}
+.pdh .l1{display:flex;align-items:center;gap:9px}
+.pdh .nm{font-size:19px;font-weight:700;letter-spacing:.02em;flex:1;min-width:0;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pdh .l2{display:flex;flex-wrap:wrap;gap:6px;margin-top:7px}
+.sec{border:1px solid var(--line);border-radius:var(--r-md);background:var(--card);margin:0 0 11px;overflow:hidden}
+.sec-h{display:flex;align-items:center;gap:8px;padding:9px 11px;background:var(--card2);
+  border-bottom:1px solid var(--line-soft)}
+.sec-h .t{font-size:12.5px;font-weight:700;letter-spacing:.06em;color:var(--ink2);flex:1;text-transform:uppercase}
+.sec-h .zh{font-weight:500;color:var(--muted);letter-spacing:.02em;text-transform:none;margin-left:5px;font-size:11.5px}
+.sec-b{padding:11px}
+.sec-b.none{color:var(--muted);font-size:13px;padding:13px 11px;text-align:center}
+.edt{width:28px;height:28px;border-radius:7px;display:grid;place-items:center;color:var(--muted);
+  border:1px solid transparent;flex:none}
+.edt:hover{background:var(--bg2);color:var(--accent-ink);border-color:var(--line)}
+.edt svg{width:15px;height:15px}
+
+ul.lines{margin:0;padding:0 0 0 4px;list-style:none}
+ul.lines li{position:relative;padding:0 0 0 15px;margin:0 0 5px;font-size:14px;line-height:1.55;word-break:break-word}
+ul.lines li:last-child{margin-bottom:0}
+ul.lines li::before{content:"";position:absolute;left:2px;top:8.5px;width:5px;height:5px;border-radius:50%;background:var(--accent)}
+ul.lines.num{counter-reset:n}
+ul.lines.num li{counter-increment:n;padding-left:22px}
+ul.lines.num li::before{content:counter(n)".";position:absolute;left:0;top:0;width:auto;height:auto;
+  background:none;border-radius:0;font-size:12.5px;font-weight:700;color:var(--accent);line-height:1.7}
+.narr{font-size:14px;line-height:1.62;word-break:break-word}
+.narr .np{color:var(--muted)}
+
+/* 用藥列 */
+.med{display:flex;gap:9px;align-items:flex-start;padding:8px 9px;border:1px solid var(--line-soft);
+  border-radius:var(--r-sm);background:var(--card2);margin:0 0 6px}
+.med:last-child{margin-bottom:0}
+.med.held{opacity:.6}
+.med .rt{font-size:10.5px;font-weight:700;letter-spacing:.04em;padding:3px 6px;border-radius:5px;flex:none;
+  background:var(--accent-soft);color:var(--accent-ink);min-width:30px;text-align:center}
+.med .rt.iv{background:var(--info-soft);color:var(--info)}
+.med .rt.if{background:#EFE7F1;color:#66507A}
+.med .mm{flex:1;min-width:0}
+.med .mn{font-size:14px;font-weight:600;word-break:break-word}
+.med .ms{font-size:12.5px;color:var(--ink2);margin-top:2px;word-break:break-word}
+.med .mh{font-size:11.5px;color:var(--danger);margin-top:2px}
+
+/* 表格（vital / lab）：過寬時整塊橫向捲動 */
+.tscroll{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:-11px;padding:0;
+  border-radius:0 0 var(--r-md) var(--r-md)}
+.tscroll::-webkit-scrollbar{height:7px}
+.tscroll::-webkit-scrollbar-thumb{background:#DCD2BE;border-radius:99px}
+table.gt{border-collapse:separate;border-spacing:0;font-size:13px;width:max-content;min-width:100%}
+table.gt th,table.gt td{padding:7px 10px;text-align:left;white-space:nowrap;
+  border-bottom:1px solid var(--line-soft)}
+table.gt thead th{background:var(--card2);font-size:11.5px;font-weight:700;color:var(--ink2);
+  letter-spacing:.03em;position:sticky;top:0;z-index:2}
+table.gt tbody tr:last-child td{border-bottom:none}
+table.gt .stick{position:sticky;left:0;background:var(--card);z-index:1;
+  box-shadow:1px 0 0 var(--line-soft);font-weight:600}
+table.gt thead .stick{background:var(--card2);z-index:3}
+table.gt tbody tr:nth-child(even) td{background:var(--card2)}
+table.gt tbody tr:nth-child(even) .stick{background:var(--card2)}
+table.gt .u{font-weight:400;color:var(--muted);font-size:11px;margin-left:4px}
+table.gt .v{font-family:var(--mono);font-size:12.5px}
+table.gt .fl{font-size:10px;font-weight:700;margin-left:3px;vertical-align:1px}
+table.gt .fl.H{color:var(--danger)}
+table.gt .fl.L{color:var(--info)}
+table.gt td.na{color:#C6BCA9}
+
+/* 檢查 */
+.exam{padding:8px 9px;border:1px solid var(--line-soft);border-radius:var(--r-sm);background:var(--card2);margin:0 0 6px}
+.exam:last-child{margin-bottom:0}
+.exam .eh{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.exam .et{font-size:11px;font-weight:700;letter-spacing:.04em;padding:3px 7px;border-radius:5px;
+  background:var(--info-soft);color:var(--info)}
+.exam .ed{font-size:11.5px;color:var(--muted)}
+.exam .eti{font-size:13.5px;font-weight:600}
+.exam .ef{font-size:13px;color:var(--ink2);margin-top:4px;white-space:pre-wrap;word-break:break-word;line-height:1.55}
+
+/* 編輯器內的可刪除列 */
+.erow{border:1px solid var(--line);border-radius:var(--r-sm);background:var(--card2);padding:10px;margin:0 0 9px}
+.erow .eh{display:flex;align-items:center;gap:8px;margin:0 0 8px}
+.erow .eh b{font-size:12.5px;color:var(--ink2);flex:1;letter-spacing:.03em}
+.del{width:28px;height:28px;border-radius:7px;display:grid;place-items:center;color:var(--muted);flex:none;
+  border:1px solid var(--line);background:var(--card)}
+.del:hover{background:var(--danger-soft);color:var(--danger);border-color:#E7CFC9}
+.del svg{width:14px;height:14px}
+.addrow{width:100%;height:38px;border:1px dashed var(--line);border-radius:var(--r-sm);color:var(--ink2);
+  background:var(--card2);font-size:13.5px;font-weight:600;display:flex;align-items:center;
+  justify-content:center;gap:6px}
+.addrow:hover{background:var(--bg2);border-color:#D6CAB2}
+.addrow svg{width:15px;height:15px}
+
+/* PI 症狀／理學檢查列 */
+.sym{border:1px solid var(--line);border-radius:var(--r-sm);background:var(--card2);margin:0 0 7px;overflow:hidden}
+.sym .sh{display:flex;align-items:center;gap:9px;padding:9px 10px}
+.sym .sh .nm{flex:1;min-width:0;font-size:14px;font-weight:600}
+.sym .sh .nm small{display:block;font-size:11.5px;color:var(--muted);font-weight:500}
+.sym .sb{padding:0 10px 10px;display:none;gap:8px;flex-wrap:wrap}
+.sym.on{border-color:#CFE0D2;background:var(--accent-soft)}
+.sym.on .sb{display:flex}
+.sym.neg{border-color:var(--line);background:var(--card2)}
+.sym .sb .fx{flex:1;min-width:120px}
+.ckbox{width:22px;height:22px;border-radius:7px;border:1.8px solid var(--line);background:var(--card);
+  flex:none;display:grid;place-items:center;transition:background .15s,border-color .15s}
+.ckbox svg{width:13px;height:13px;color:#fff;opacity:0}
+.ckbox.on{background:var(--accent);border-color:var(--accent)}
+.ckbox.on svg{opacity:1}
+.days{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ink2)}
+.days input{width:62px;height:34px;text-align:center}
+.mini{height:34px;font-size:13.5px}
+
+/* 三態按鈕（理學檢查） */
+.tri{display:flex;border:1px solid var(--line);border-radius:7px;overflow:hidden;flex:none;background:var(--card)}
+.tri button{width:40px;height:30px;font-size:12px;font-weight:700;color:var(--muted);border-right:1px solid var(--line-soft)}
+.tri button:last-child{border-right:none}
+.tri button.on{color:#fff}
+.tri button.on[data-v="pos"]{background:var(--hot)}
+.tri button.on[data-v="neg"]{background:var(--muted)}
+
+/* 選單 */
+.menu{position:fixed;z-index:70;background:var(--card);border:1px solid var(--line);border-radius:var(--r-md);
+  box-shadow:var(--sh-2);padding:5px;min-width:196px;animation:fade .12s ease}
+.menu button{display:flex;align-items:center;gap:9px;width:100%;padding:9px 10px;border-radius:var(--r-sm);
+  font-size:14px;color:var(--ink);text-align:left}
+.menu button:hover{background:var(--bg2)}
+.menu button.dang{color:var(--danger)}
+.menu svg{width:16px;height:16px;color:var(--muted);flex:none}
+.menu button.dang svg{color:var(--danger)}
+.menu .sepl{height:1px;background:var(--line-soft);margin:5px 3px}
+
+/* ---------- 登入 / 解鎖 ---------- */
+.gate{min-height:100vh;min-height:100dvh;display:flex;align-items:center;justify-content:center;padding:22px 16px;
+  padding-top:calc(22px + env(safe-area-inset-top))}
+.gbox{width:100%;max-width:420px;background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);
+  box-shadow:var(--sh-2);padding:22px 20px}
+.gbox .gh{display:flex;align-items:center;gap:9px;margin:0 0 4px}
+.gbox .gh svg{width:24px;height:24px;color:var(--accent)}
+.gbox h1{margin:0;font-size:20px;letter-spacing:.02em}
+.gbox .lead{color:var(--muted);font-size:13px;line-height:1.6;margin:0 0 16px}
+.gbox .alt{margin:14px 0 0;text-align:center;font-size:13px;color:var(--muted)}
+.gbox .alt button{color:var(--accent-ink);font-weight:600;text-decoration:underline;text-underline-offset:2px}
+.gbox .btn{width:100%}
+.lockicon{width:44px;height:44px;border-radius:12px;background:var(--accent-soft);color:var(--accent-ink);
+  display:grid;place-items:center;margin:0 0 12px}
+.lockicon svg{width:22px;height:22px}
+
+/* toast */
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(84px + env(safe-area-inset-bottom));
+  z-index:80;background:#3B352C;color:#F6F1E6;font-size:13.5px;padding:10px 16px;border-radius:999px;
+  box-shadow:var(--sh-2);animation:fade .14s ease;max-width:88vw;text-align:center}
+.toast.bad{background:#7A3529}
+</style>
+</head>
+<body>
+
+<!-- ============ 設定 Supabase ============ -->
+<div id="scr-setup" class="gate hide">
+  <div class="gbox">
+    <div class="gh">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6a2 2 0 0 1 2 2v0h1a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h1a2 2 0 0 1 2-2z"/><path d="M9 12h6M9 16h4"/></svg>
+      <h1>連線設定</h1>
+    </div>
+    <p class="lead">這個 App 用 <b>Supabase</b>（免費）做帳號與跨裝置同步。請依 <code>SETUP.md</code> 建立專案後填入下面兩個值，或直接寫進 <code>index.html</code> 最上方的 <code>CONFIG</code>，這樣所有裝置都不用再填。</p>
+    <div id="setup-err" class="err hide"></div>
+    <div class="field"><label class="lab" for="su-url">Project URL</label>
+      <input id="su-url" class="inp mono" placeholder="https://xxxxxxxx.supabase.co" autocapitalize="off" autocorrect="off" spellcheck="false"></div>
+    <div class="field"><label class="lab" for="su-key">Publishable / anon key</label>
+      <input id="su-key" class="inp mono" placeholder="sb_publishable_..." autocapitalize="off" autocorrect="off" spellcheck="false"></div>
+    <button id="su-save" class="btn pri">儲存並繼續</button>
+    <p class="hintline">這兩個值本來就設計成可公開，真正的保護來自資料庫的 Row Level Security 與本機加密。</p>
+  </div>
+</div>
+
+<!-- ============ 登入 ============ -->
+<div id="scr-auth" class="gate hide">
+  <div class="gbox">
+    <div class="gh">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6a2 2 0 0 1 2 2v0h1a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h1a2 2 0 0 1 2-2z"/><path d="M9 12h6M9 16h4"/></svg>
+      <h1>Patient List</h1>
+    </div>
+    <p class="lead" id="auth-lead">請登入以同步你的病人清單。</p>
+    <div id="auth-err" class="err hide"></div>
+    <div id="auth-ok" class="ok hide"></div>
+    <div class="field"><label class="lab" for="au-email">Email</label>
+      <input id="au-email" class="inp" type="email" autocomplete="username" autocapitalize="off" spellcheck="false"></div>
+    <div class="field" id="au-pwrow"><label class="lab" for="au-pw">密碼</label>
+      <input id="au-pw" class="inp" type="password" autocomplete="current-password"></div>
+    <button id="au-go" class="btn pri">登入</button>
+    <p class="alt"><span id="au-alt-t">還沒有帳號？</span> <button id="au-alt">註冊一個</button></p>
+    <p class="alt"><button id="au-reset">忘記密碼</button></p>
+  </div>
+</div>
+
+<!-- ============ 資料密碼 ============ -->
+<div id="scr-lock" class="gate hide">
+  <div class="gbox">
+    <div class="lockicon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></div>
+    <h1 id="lock-h">輸入資料密碼</h1>
+    <p class="lead" id="lock-lead">病人資料在這台裝置上加密後才上傳，雲端只存得到密文。請輸入你的資料密碼解鎖。</p>
+    <div id="lock-err" class="err hide"></div>
+    <div class="field"><label class="lab" for="lk-pw">資料密碼</label>
+      <input id="lk-pw" class="inp" type="password" autocomplete="off"></div>
+    <div class="field hide" id="lk-pw2row"><label class="lab" for="lk-pw2">再輸入一次</label>
+      <input id="lk-pw2" class="inp" type="password" autocomplete="off"></div>
+    <div class="field">
+      <button id="lk-remember" class="chip on" aria-pressed="true">在這台裝置記住</button>
+    </div>
+    <button id="lk-go" class="btn pri">解鎖</button>
+    <p class="hintline" id="lock-hint">資料密碼與登入密碼不同，永遠不會離開這台裝置。忘記就解不開既有資料——請自行記牢。</p>
+    <p class="alt"><button id="lk-signout">用別的帳號登入</button></p>
+  </div>
+</div>
+
+<!-- ============ 主畫面 ============ -->
+<div id="app" class="hide">
+  <header class="top">
+    <div class="wrap">
+      <div class="top-in">
+        <div class="brand">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6a2 2 0 0 1 2 2v0h1a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h1a2 2 0 0 1 2-2z"/><path d="M9 12h6M9 16h4"/></svg>
+          <span>Patient List</span>
+        </div>
+        <div class="top-sp"></div>
+        <span id="sync" class="pill"><i class="dot"></i><span id="sync-t">已同步</span></span>
+        <button id="btn-menu" class="iconbtn" aria-label="更多">
+          <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="12" cy="19" r="1.8"/></svg>
+        </button>
+      </div>
+      <div class="nav" id="nav"></div>
+    </div>
+  </header>
+
+  <main>
+    <div class="wrap">
+      <div class="tools">
+        <div class="search">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+          <input id="q" placeholder="病歷號或姓名" autocapitalize="off" autocorrect="off" spellcheck="false">
+          <button id="q-clear" class="hide" aria-label="清除">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+          </button>
+        </div>
+        <div class="drange">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>
+          <input id="d1" type="date" aria-label="起始日"><span>–</span><input id="d2" type="date" aria-label="結束日">
+        </div>
+        <button id="f-clear" class="tbtn hide">清除條件</button>
+      </div>
+      <div id="list"></div>
+    </div>
+  </main>
+
+  <button class="fab" id="fab">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+    新增病人
+  </button>
+</div>
+
+<div id="modals"></div>
+
+<script>
+/* =========================================================================
+ *  Patient List — 單檔 PWA
+ *
+ *  資料流：病人物件 → JSON → AES-GCM 加密（金鑰由「資料密碼」PBKDF2 導出）
+ *          → base64 → Supabase patients.payload。伺服器端全程只見密文，
+ *          所以搜尋、篩選、排序一律在瀏覽器內做。
+ * ========================================================================= */
+
+/* 建好 Supabase 專案後填這兩個值，所有裝置就不用再各自設定一次 */
+const CONFIG = {
+  SUPABASE_URL: '',
+  SUPABASE_ANON_KEY: ''
+};
+
+const DEMO = new URLSearchParams(location.search).get('demo') === '1';
+const LS = {
+  cfg:'pl.cfg', dk:'pl.dk.', demo:'pl.demo', vault:'pl.demo.vault', tab:'pl.tab'
+};
+
+/* ---------------- 小工具 ---------------- */
+const $  = (s,r)=> (r||document).querySelector(s);
+const $$ = (s,r)=> Array.from((r||document).querySelectorAll(s));
+const h  = s => String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const uid = ()=> (crypto.randomUUID ? crypto.randomUUID()
+  : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,c=>{
+      const r=Math.random()*16|0, v=c==='x'?r:(r&0x3|0x8); return v.toString(16);}));
+const todayStr = ()=>{ const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
+const nowStamp = ()=>{ const d=new Date(); return `${todayStr()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; };
+function daysSince(ds){
+  if(!ds) return null;
+  const a=new Date(ds+'T00:00:00'), b=new Date(todayStr()+'T00:00:00');
+  if(isNaN(a)) return null;
+  return Math.round((b-a)/86400000);
+}
+function fmtDate(ds){ return ds ? ds.slice(5).replace('-','/') : ''; }
+function fmtStamp(iso){
+  const d = new Date(iso);
+  if(isNaN(d)) return '';
+  const p = n => String(n).padStart(2,'0');
+  return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+function toast(msg, bad){
+  const t=document.createElement('div'); t.className='toast'+(bad?' bad':''); t.textContent=msg;
+  document.body.appendChild(t); setTimeout(()=>t.remove(), bad?3600:2000);
+}
+function svgIcon(d, w){ return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${w||1.9}" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`; }
+const ICO = {
+  edit:'<path d="M4 20h4l10-10a2.8 2.8 0 0 0-4-4L4 16v4z"/>',
+  trash:'<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>',
+  plus:'<path d="M12 5v14M5 12h14"/>',
+  x:'<path d="M6 6l12 12M18 6L6 18"/>',
+  back:'<path d="M15 6l-6 6 6 6"/>',
+  check:'<path d="M5 12.5l4.5 4.5L19 7.5"/>'
+};
+
+/* ---------------- 加密 ---------------- */
+const enc = new TextEncoder(), dec = new TextDecoder();
+const b64 = buf => btoa(String.fromCharCode(...new Uint8Array(buf)));
+const unb64 = s => Uint8Array.from(atob(s), c=>c.charCodeAt(0));
+const ITERS = 250000;
+let KEY = null;                         // CryptoKey，解鎖後才有
+
+async function deriveKey(pass, saltB64, iters){
+  const base = await crypto.subtle.importKey('raw', enc.encode(pass), 'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey(
+    { name:'PBKDF2', salt: unb64(saltB64), iterations: iters||ITERS, hash:'SHA-256' },
+    base, { name:'AES-GCM', length:256 }, true, ['encrypt','decrypt']);
+}
+async function encJSON(obj, key){
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = await crypto.subtle.encrypt({name:'AES-GCM', iv}, key||KEY, enc.encode(JSON.stringify(obj)));
+  const out = new Uint8Array(12 + ct.byteLength);
+  out.set(iv,0); out.set(new Uint8Array(ct),12);
+  return b64(out);
+}
+async function decJSON(s, key){
+  const raw = unb64(s);
+  const pt = await crypto.subtle.decrypt({name:'AES-GCM', iv: raw.slice(0,12)}, key||KEY, raw.slice(12));
+  return JSON.parse(dec.decode(pt));
+}
+
+/* ---------------- 資料層（Supabase / demo）---------------- */
+let sb = null, session = null, USERID = null;
+
+const supaDB = {
+  async getVault(){
+    const { data, error } = await sb.from('vault').select('*').eq('user_id', USERID).maybeSingle();
+    if(error) throw error; return data;
+  },
+  async putVault(v){
+    const { error } = await sb.from('vault').upsert({ user_id: USERID, ...v });
+    if(error) throw error;
+  },
+  async list(){
+    const { data, error } = await sb.from('patients').select('id,payload,rev,updated_at').eq('user_id', USERID);
+    if(error) throw error; return data||[];
+  },
+  async put(id, payload){
+    const { error } = await sb.from('patients').upsert({ id, user_id: USERID, payload });
+    if(error) throw error;
+  },
+  async del(id){
+    const { error } = await sb.from('patients').delete().eq('id', id);
+    if(error) throw error;
+  }
+};
+
+/* demo：不連雲端，一切寫 localStorage，但加密流程完全一樣 */
+const demoDB = {
+  _read(){ try{ return JSON.parse(localStorage.getItem(LS.demo)||'{}'); }catch(e){ return {}; } },
+  _write(o){ localStorage.setItem(LS.demo, JSON.stringify(o)); },
+  async getVault(){ try{ return JSON.parse(localStorage.getItem(LS.vault)||'null'); }catch(e){ return null; } },
+  async putVault(v){ localStorage.setItem(LS.vault, JSON.stringify(v)); },
+  async list(){ const o=this._read(); return Object.keys(o).map(id=>({id, payload:o[id], rev:1})); },
+  async put(id, payload){ const o=this._read(); o[id]=payload; this._write(o); },
+  async del(id){ const o=this._read(); delete o[id]; this._write(o); }
+};
+const DB = DEMO ? demoDB : supaDB;
+
+/* ---------------- 臨床常數 ---------------- */
+const SYMPTOMS = [
+  {k:'fever',        en:'Fever',           zh:'發燒'},
+  {k:'nausea',       en:'Nausea',          zh:'噁心'},
+  {k:'vomiting',     en:'Vomiting',        zh:'嘔吐'},
+  {k:'abd_pain',     en:'Abdominal pain',  zh:'腹痛', loc:true, course:true},
+  {k:'diarrhea',     en:'Diarrhea',        zh:'腹瀉'},
+  {k:'weakness',     en:'Weakness',        zh:'倦怠無力'},
+  {k:'drowsy',       en:'Drowsy',          zh:'嗜睡'},
+  {k:'bloody_stool', en:'Bloody stool',    zh:'血便'},
+  {k:'tarry_stool',  en:'Tarry stool',     zh:'黑便'},
+  {k:'no_defecation',en:'No defecation',   zh:'未解便'},
+  {k:'distension',   en:'Distension',      zh:'腹脹'}
+];
+const COURSES = ['persistent','intermittent','progressive','resolving'];
+const REGIONS = ['RUQ','LUQ','RLQ','LLQ','epigastric','periumbilical','suprapubic','Rt flank','Lt flank','whole abdomen'];
+const SEVERITY = ['mild','moderate','severe'];
+const SIGNS = [
+  {k:'murphy',    en:"Murphy's sign",           zh:'莫非氏徵'},
+  {k:'mcburney',  en:"McBurney's point sign",   zh:'麥氏點壓痛'},
+  {k:'rovsing',   en:"Rovsing's sign",          zh:'羅氏徵'},
+  {k:'obturator', en:'Obturator sign',          zh:'閉孔肌徵'},
+  {k:'psoas',     en:'Psoas sign',              zh:'腰大肌徵'},
+  {k:'carnett',   en:"Carnett's sign",          zh:'卡氏徵'},
+  {k:'cv_knock',  en:'CV knocking pain',        zh:'肋脊角叩痛', side:true},
+  {k:'brudzinski',en:"Brudzinski's sign",       zh:'布氏徵'},
+  {k:'kernig',    en:"Kernig's sign",           zh:'克氏徵'},
+  {k:'tender',    en:'Abdominal tenderness',    zh:'腹部壓痛',   loc:true, sev:true},
+  {k:'rebound',   en:'Rebounding tenderness',   zh:'反彈痛',     loc:true, sev:true},
+  {k:'guarding',  en:'Muscle guarding',         zh:'肌肉緊繃'},
+  {k:'rigidity',  en:'Abdominal rigidity',      zh:'腹壁僵硬'}
+];
+const BOWEL = ['hypoactive','normoactive','hyperactive'];
+const ROUTES = ['PO','IV','IF'];
+const FREQS  = ['QD','BID','TID','QID','Q6H','Q8H','Q12H','HS','QOD','PRN','STAT','ST'];
+const EXAM_TYPES = ['EKG','CXR','Echo','CT','EGD','CFS','MRI','PET','其他'];
+
+/* ---------------- 病人物件 ---------------- */
+function blankPatient(){
+  return {
+    v:1, id:uid(), mrn:'', name:'', sex:'', age:'', vs:'', bed:'',
+    status:'er', tracking:true, er_date:todayStr(), adm_date:'',
+    history:[], pi:{ symptoms:{}, npo_since:'', signs:{}, text:'' },
+    meds:[], vitals:[], labs:{items:[], cols:[], vals:{}}, exams:[],
+    assessment:[], plan:[], note:'',
+    created_at:new Date().toISOString(), updated_at:new Date().toISOString()
+  };
+}
+function normalize(p){
+  const b = blankPatient();
+  const o = Object.assign(b, p||{});
+  o.pi = Object.assign({symptoms:{}, npo_since:'', signs:{}, text:''}, p&&p.pi||{});
+  o.labs = Object.assign({items:[], cols:[], vals:{}}, p&&p.labs||{});
+  ['history','meds','vitals','exams','assessment','plan'].forEach(k=>{ if(!Array.isArray(o[k])) o[k]=[]; });
+  if(!Array.isArray(o.labs.items)) o.labs.items=[];
+  if(!Array.isArray(o.labs.cols))  o.labs.cols=[];
+  if(!o.labs.vals || typeof o.labs.vals!=='object') o.labs.vals={};
+  if(o.status!=='er' && o.status!=='ward') o.status='er';
+  o.tracking = o.tracking !== false;
+  return o;
+}
+const admitDateOf = p => p.status==='ward' ? (p.adm_date||p.er_date) : (p.er_date||p.adm_date);
+const ageSexOf = p => [p.age!==''&&p.age!=null ? p.age+' y/o' : '', p.sex==='M'?'Male':p.sex==='F'?'Female':''].filter(Boolean).join(' ');
+
+/* ---------------- 敘述產生 ---------------- */
+function piNarrative(pi){
+  const out = [];
+  SYMPTOMS.forEach(s=>{
+    const v = pi.symptoms[s.k]; if(!v||!v.on) return;
+    let t = s.en.toLowerCase();
+    const paren = [];
+    if(s.loc && v.loc) paren.push(v.loc);
+    if(s.course && v.course) paren.push(v.course);
+    if(paren.length) t += ' ('+paren.join(', ')+')';
+    if(v.days!=='' && v.days!=null) t += ' for '+v.days+(String(v.days)==='1'?' day':' days');
+    out.push(t);
+  });
+  let s1 = '';
+  if(out.length){
+    s1 = out.join(', ');
+    s1 = s1.charAt(0).toUpperCase()+s1.slice(1)+'.';
+  }
+  const extra = [];
+  if(pi.npo_since) extra.push('NPO since '+pi.npo_since+'.');
+  return [s1, extra.join(' ')].filter(Boolean).join(' ');
+}
+function signNarrative(pi){
+  const out = [];
+  SIGNS.forEach(s=>{
+    const v = pi.signs[s.k]; if(!v||!v.v) return;
+    let t = s.en;
+    const paren = [];
+    if(s.side && v.side) paren.push(v.side);
+    if(s.loc && v.loc)  paren.push(v.loc);
+    if(s.sev && v.sev)  paren.push(v.sev);
+    if(paren.length) t += ' ('+paren.join(', ')+')';
+    t += v.v==='pos' ? ' (+)' : ' (−)';
+    out.push(t);
+  });
+  const bs = pi.signs.bowel_sound;
+  if(bs && bs.v) out.push('bowel sound: '+bs.v);
+  return out.join('; ');
+}
+
+/* =========================================================================
+ *  狀態與清單
+ * ========================================================================= */
+const ST = { patients:[], tab: localStorage.getItem(LS.tab)||'er', q:'', d1:'', d2:'', openId:null, saving:0 };
+
+function counts(){
+  const c={er:0, ward:0, off:0};
+  ST.patients.forEach(p=>{ if(!p.tracking) c.off++; else c[p.status]++; });
+  return c;
+}
+function renderNav(){
+  const c = counts();
+  const tabs = [
+    {k:'er',   t:'急診', n:c.er},
+    {k:'ward', t:'住院', n:c.ward},
+    {k:'off',  t:'已結束', n:c.off}
+  ];
+  $('#nav').innerHTML = tabs.map(t=>
+    `<button data-tab="${t.k}" class="${ST.tab===t.k?'on':''}">${t.t}<span class="n">${t.n}</span></button>`).join('');
+}
+function filtered(){
+  const q = ST.q.trim().toLowerCase();
+  return ST.patients.filter(p=>{
+    if(ST.tab==='off'){ if(p.tracking) return false; }
+    else { if(!p.tracking || p.status!==ST.tab) return false; }
+    if(q && !((p.mrn||'').toLowerCase().includes(q) || (p.name||'').toLowerCase().includes(q))) return false;
+    if(ST.d1 || ST.d2){
+      const d = admitDateOf(p);
+      if(!d) return false;
+      if(ST.d1 && d < ST.d1) return false;
+      if(ST.d2 && d > ST.d2) return false;
+    }
+    return true;
+  }).sort((a,b)=>{
+    const da = admitDateOf(a)||'', db = admitDateOf(b)||'';
+    if(da!==db) return db.localeCompare(da);
+    return (a.name||'').localeCompare(b.name||'');
+  });
+}
+function cardHTML(p){
+  const d = admitDateOf(p), n = daysSince(d);
+  const dayTag = d ? `<span class="tag ${p.status==='er'?'er':'d'}">${p.status==='er'?'來診':'住院'} ${fmtDate(d)}${n!=null?` · D${n+1}`:''}</span>` : '';
+  const npo = p.pi && p.pi.npo_since ? `<span class="tag warn">NPO ${fmtDate(p.pi.npo_since)}</span>` : '';
+  const bed = p.bed ? `<span class="tag info">${h(p.bed)}</span>` : '';
+  const off = !p.tracking ? `<span class="tag off">已結束追蹤</span>` : '';
+  const ax  = (p.assessment||[]).filter(Boolean);
+  return `<button class="pt ${p.status==='er'?'er':''} ${p.tracking?'':'off'}" data-id="${p.id}">
+    <i class="bar"></i>
+    <span class="bd">
+      <span class="r1"><span class="nm">${h(p.name)||'（未填姓名）'}</span><span class="mrn">${h(p.mrn)||'—'}</span></span>
+      <span class="r2">${h(ageSexOf(p))||'<span class="vs">未填年齡性別</span>'}${p.vs?` <span class="vs">· VS ${h(p.vs)}</span>`:''}</span>
+      <span class="r3">${dayTag}${bed}${npo}${off}</span>
+      ${ax.length?`<span class="ax">${h(ax.slice(0,2).join('；'))}</span>`:''}
+    </span>
+  </button>`;
+}
+function renderList(){
+  renderNav();
+  const rows = filtered();
+  const box = $('#list');
+  if(!rows.length){
+    const anyFilter = ST.q || ST.d1 || ST.d2;
+    box.innerHTML = `<div class="empty"><b>${anyFilter?'查無符合條件的病人':'這裡還沒有病人'}</b>${
+      anyFilter?'換個病歷號、姓名或日期範圍試試。':'按右下角「新增病人」開始，或從選單匯入資料。'}</div>`;
+  } else {
+    box.innerHTML = `<div class="cards">${rows.map(cardHTML).join('')}</div>`;
+  }
+  $('#f-clear').classList.toggle('hide', !(ST.q||ST.d1||ST.d2));
+  $('#q-clear').classList.toggle('hide', !ST.q);
+}
+
+/* =========================================================================
+ *  Sheet（彈出層）
+ * ========================================================================= */
+const sheetStack = [];
+function openSheet({title, sub, body, footer, wide, onMount, onClose}){
+  const ov = document.createElement('div');
+  ov.className = 'ov';
+  ov.innerHTML = `<div class="sheet${wide?' wide':''}" role="dialog" aria-modal="true">
+    <div class="sh-h">
+      <div style="flex:1;min-width:0"><h2>${title}${sub?`<span class="sub">${sub}</span>`:''}</h2></div>
+      <button class="iconbtn" data-close aria-label="關閉">${svgIcon(ICO.x,2.2)}</button>
+    </div>
+    <div class="sh-b">${body||''}</div>
+    ${footer===null?'':`<div class="sh-f">${footer||'<span class="sp"></span><button class="btn" data-close>關閉</button>'}</div>`}
+  </div>`;
+  $('#modals').appendChild(ov);
+  const close = ()=>{
+    ov.remove(); const i=sheetStack.indexOf(rec); if(i>=0) sheetStack.splice(i,1);
+    if(onClose) onClose();
+  };
+  const rec = {ov, close};
+  sheetStack.push(rec);
+  ov.addEventListener('click', e=>{
+    if(e.target===ov) close();
+    if(e.target.closest('[data-close]')) close();
+  });
+  if(onMount) onMount(ov, close);
+  return rec;
+}
+function closeTop(){ const t = sheetStack[sheetStack.length-1]; if(t) t.close(); }
+document.addEventListener('keydown', e=>{ if(e.key==='Escape' && sheetStack.length) closeTop(); });
+
+function confirmSheet(title, msg, okText, danger){
+  return new Promise(res=>{
+    let done=false;
+    const s = openSheet({
+      title, body:`<p style="margin:0;font-size:14.5px;line-height:1.65;color:var(--ink2)">${msg}</p>`,
+      footer:`<span class="sp"></span><button class="btn" data-close>取消</button>
+              <button class="btn ${danger?'dang':'pri'}" data-ok>${okText||'確定'}</button>`,
+      onMount(ov, close){
+        ov.querySelector('[data-ok]').onclick = ()=>{ done=true; close(); res(true); };
+      },
+      onClose(){ if(!done) res(false); }
+    });
+  });
+}
+
+/* =========================================================================
+ *  儲存
+ * ========================================================================= */
+function setSync(state, text){
+  const el = $('#sync');
+  el.classList.toggle('warn', state!=='ok');
+  $('#sync-t').textContent = text;
+}
+async function savePatient(p, quiet){
+  p.updated_at = new Date().toISOString();
+  const i = ST.patients.findIndex(x=>x.id===p.id);
+  if(i<0) ST.patients.push(p); else ST.patients[i]=p;
+  renderList();
+  ST.saving++; setSync('busy','儲存中…');
+  try{
+    await DB.put(p.id, await encJSON(p));
+    ST.saving--;
+    if(!ST.saving){ setSync('ok', DEMO?'本機試用':'已同步'); if(!quiet) toast('已儲存'); }
+  }catch(e){
+    ST.saving--; setSync('err','儲存失敗');
+    toast('儲存失敗：'+(e.message||e), true);
+    throw e;
+  }
+}
+async function deletePatient(p){
+  ST.patients = ST.patients.filter(x=>x.id!==p.id);
+  renderList();
+  try{ await DB.del(p.id); toast('已刪除'); }
+  catch(e){ toast('刪除失敗：'+(e.message||e), true); }
+}
+
+/* =========================================================================
+ *  病人明細
+ * ========================================================================= */
+function sec(title, zh, kind, bodyHTML, empty){
+  const body = bodyHTML && bodyHTML.trim()
+    ? `<div class="sec-b">${bodyHTML}</div>`
+    : `<div class="sec-b none">${empty||'尚未填寫'}</div>`;
+  return `<section class="sec">
+    <div class="sec-h"><span class="t">${title}${zh?`<span class="zh">${zh}</span>`:''}</span>
+      <button class="edt" data-edit="${kind}" aria-label="編輯${zh||title}">${svgIcon(ICO.edit)}</button></div>
+    ${body}</section>`;
+}
+function linesHTML(arr, num){
+  const a = (arr||[]).filter(x=>String(x).trim());
+  if(!a.length) return '';
+  return `<ul class="lines${num?' num':''}">${a.map(x=>`<li>${h(x)}</li>`).join('')}</ul>`;
+}
+function piHTML(p){
+  const pi = p.pi||{};
+  const narr = piNarrative(pi), sg = signNarrative(pi);
+  const bits = [];
+  if(narr) bits.push(`<p class="narr" style="margin:0 0 8px">${h(narr)}</p>`);
+  if(pi.text) bits.push(`<p class="narr" style="margin:0 0 8px;white-space:pre-wrap">${h(pi.text)}</p>`);
+  if(sg) bits.push(`<p class="narr np" style="margin:0"><b style="color:var(--ink2)">Signs:</b> ${h(sg)}</p>`);
+  return bits.join('');
+}
+function medsHTML(p){
+  if(!p.meds.length) return '';
+  return p.meds.map(m=>{
+    const rt = (m.route||'PO').toLowerCase();
+    const parts = [m.dose, m.freq].filter(Boolean).join(' ');
+    const rate = m.route==='IF' && m.rate ? ` · ${h(m.rate)}` : '';
+    return `<div class="med${m.hold?' held':''}">
+      <span class="rt ${rt}">${h(m.route||'PO')}</span>
+      <span class="mm"><span class="mn">${h(m.name)}</span>
+      ${parts||rate?`<span class="ms">${h(parts)}${rate}</span>`:''}
+      ${m.note?`<span class="ms">${h(m.note)}</span>`:''}
+      ${m.hold?`<span class="mh">Hold since ${h(m.hold)}</span>`:''}</span></div>`;
+  }).join('');
+}
+function vitalsHTML(p){
+  if(!p.vitals.length) return '';
+  const rows = p.vitals.slice().sort((a,b)=>String(b.t||'').localeCompare(String(a.t||'')));
+  return `<div class="tscroll"><table class="gt">
+    <thead><tr><th class="stick">時間</th><th>T (°C)</th><th>P</th><th>R</th><th>BP</th><th>SpO₂</th><th>O₂</th></tr></thead>
+    <tbody>${rows.map(v=>`<tr>
+      <td class="stick">${h(v.t||'')}</td>
+      ${['T','P','R','BP','SpO2','O2'].map(k=>v[k]?`<td class="v">${h(v[k])}</td>`:'<td class="na">–</td>').join('')}
+    </tr>`).join('')}</tbody></table></div>`;
+}
+function labCell(val){
+  if(val==null || val==='') return '<td class="na">–</td>';
+  const m = String(val).match(/^(.*?)\s*([HL])$/);
+  if(m) return `<td class="v">${h(m[1])}<span class="fl ${m[2]}">${m[2]}</span></td>`;
+  return `<td class="v">${h(val)}</td>`;
+}
+function labsHTML(p){
+  const L = p.labs;
+  if(!L.items.length || !L.cols.length) return '';
+  const cols = L.cols.slice().sort();
+  return `<div class="tscroll"><table class="gt">
+    <thead><tr><th class="stick">檢驗項目</th>${cols.map(c=>`<th>${h(c)}</th>`).join('')}</tr></thead>
+    <tbody>${L.items.map(it=>`<tr>
+      <td class="stick">${h(it.name)}${it.unit?`<span class="u">${h(it.unit)}</span>`:''}</td>
+      ${cols.map(c=>labCell(L.vals[it.name+'|'+c])).join('')}
+    </tr>`).join('')}</tbody></table></div>`;
+}
+function examsHTML(p){
+  if(!p.exams.length) return '';
+  return p.exams.slice().sort((a,b)=>String(b.date||'').localeCompare(String(a.date||''))).map(e=>
+    `<div class="exam"><div class="eh"><span class="et">${h(e.type||'其他')}</span>
+      ${e.date?`<span class="ed">${h(e.date)}</span>`:''}
+      ${e.title?`<span class="eti">${h(e.title)}</span>`:''}</div>
+      ${e.findings?`<div class="ef">${h(e.findings)}</div>`:''}</div>`).join('');
+}
+function detailHTML(p){
+  const d = admitDateOf(p), n = daysSince(d);
+  const tags = [];
+  tags.push(`<span class="tag ${p.status==='er'?'er':'d'}">${p.status==='er'?'急診':'住院'}</span>`);
+  if(d) tags.push(`<span class="tag">${p.status==='er'?'來診':'住院'} ${d}${n!=null?` · D${n+1}`:''}</span>`);
+  if(p.status==='ward' && p.er_date && p.er_date!==p.adm_date) tags.push(`<span class="tag">來診 ${p.er_date}</span>`);
+  if(p.bed) tags.push(`<span class="tag info">${h(p.bed)}</span>`);
+  if(p.pi && p.pi.npo_since) tags.push(`<span class="tag warn">NPO since ${h(p.pi.npo_since)}</span>`);
+  if(!p.tracking) tags.push(`<span class="tag off">已結束追蹤</span>`);
+
+  return `<div class="pdh">
+    <div class="l1">
+      <span class="nm">${h(p.name)||'（未填姓名）'}</span>
+      <button class="edt" data-edit="base" aria-label="編輯基本資料">${svgIcon(ICO.edit)}</button>
+      <button class="iconbtn" data-pmenu aria-label="更多">
+        <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="12" cy="19" r="1.8"/></svg></button>
+    </div>
+    <div class="l2">
+      <span class="tag mono">${h(p.mrn)||'無病歷號'}</span>
+      ${ageSexOf(p)?`<span class="tag">${h(ageSexOf(p))}</span>`:''}
+      ${p.vs?`<span class="tag">VS ${h(p.vs)}</span>`:''}
+      ${tags.join('')}
+    </div>
+  </div>
+  <div class="sh-b" id="pd-body">
+    ${sec('Medical history','病史','history', linesHTML(p.history))}
+    ${sec('Present illness','現病史','pi', piHTML(p))}
+    ${sec('Medication','用藥','meds', medsHTML(p))}
+    ${sec('Vital signs','生命徵象','vitals', vitalsHTML(p))}
+    ${sec('Lab data','檢驗','labs', labsHTML(p), '尚未填寫（可用「⋮ → 匯入資料」批次帶入）')}
+    ${sec('Image / Exam','影像檢查','exams', examsHTML(p))}
+    ${sec('Assessment','評估','assessment', linesHTML(p.assessment, true))}
+    ${sec('Plan','計畫','plan', linesHTML(p.plan, true))}
+    ${p.note?sec('Note','備註','note', `<p class="narr" style="margin:0;white-space:pre-wrap">${h(p.note)}</p>`):sec('Note','備註','note','')}
+  </div>`;
+}
+function openPatient(id){
+  const p = ST.patients.find(x=>x.id===id);
+  if(!p) return;
+  ST.openId = id;
+  return openSheet({
+    title:'病人資料', wide:true, footer:null, body:'',
+    onMount(ov, close){
+      const sheet = ov.querySelector('.sheet');
+      sheet.style.maxHeight='100dvh'; sheet.style.height='100dvh'; sheet.style.borderRadius='0';
+      if(window.innerWidth>=640){ sheet.style.height='min(92dvh,900px)'; sheet.style.borderRadius='var(--r-lg)'; }
+      paint();
+      function paint(){
+        const cur = ST.patients.find(x=>x.id===id);
+        if(!cur){ close(); return; }
+        sheet.innerHTML = `<div class="sh-h">
+            <button class="iconbtn" data-close aria-label="返回">${svgIcon(ICO.back,2.2)}</button>
+            <h2 style="flex:1">病人資料<span class="sub">最後更新 ${fmtStamp(cur.updated_at)}</span></h2>
+          </div>${detailHTML(cur)}`;
+        sheet.querySelectorAll('[data-edit]').forEach(b=>{
+          b.onclick = ()=> openEditor(b.dataset.edit, cur, paint);
+        });
+        const pm = sheet.querySelector('[data-pmenu]');
+        if(pm) pm.onclick = e=> patientMenu(e.currentTarget, cur, paint, close);
+      }
+    },
+    onClose(){ ST.openId = null; renderList(); }
+  });
+}
+
+/* 病人層級選單 */
+function patientMenu(anchor, p, repaint, closeDetail){
+  const items = [];
+  if(p.status==='er') items.push({t:'轉為住院', ico:'<path d="M4 21V9l8-5 8 5v12"/><path d="M9 21v-6h6v6"/>', act:async ()=>{
+    const d = await promptDate('轉為住院', '住院日期', todayStr());
+    if(d===null) return;
+    p.status='ward'; p.adm_date=d; await savePatient(p); repaint();
+  }});
+  else items.push({t:'改回急診', ico:'<path d="M12 5v14M5 12h14"/>', act:async ()=>{
+    p.status='er'; await savePatient(p); repaint();
+  }});
+  items.push({t: p.tracking?'結束追蹤（保留資料）':'恢復追蹤', ico: p.tracking?'<path d="M12 3v9M6 8a8 8 0 1 0 12 0"/>':'<path d="M5 12.5l4.5 4.5L19 7.5"/>', act:async ()=>{
+    p.tracking = !p.tracking; await savePatient(p); repaint();
+  }});
+  items.push({t:'複製為文字病摘', ico:'<path d="M9 9h10v12H9zM5 15V3h10v2"/>', act:()=> copySummary(p)});
+  items.push({sep:true});
+  items.push({t:'刪除這位病人', dang:true, ico:ICO.trash, act:async ()=>{
+    if(await confirmSheet('刪除病人', `確定要刪除 <b>${h(p.name||p.mrn||'這位病人')}</b> 的全部資料？此動作無法復原。<br><br>若只是不再追蹤，請改用「結束追蹤」，資料會保留。`, '刪除', true)){
+      await deletePatient(p); if(closeDetail) closeDetail();
+    }
+  }});
+  popMenu(anchor, items);
+}
+function popMenu(anchor, items){
+  const m = document.createElement('div');
+  m.className = 'menu';
+  m.innerHTML = items.map((it,i)=> it.sep ? '<div class="sepl"></div>'
+    : `<button data-i="${i}" class="${it.dang?'dang':''}">${svgIcon(it.ico)}<span>${it.t}</span></button>`).join('');
+  document.body.appendChild(m);
+  const r = anchor.getBoundingClientRect();
+  const w = m.offsetWidth, hh = m.offsetHeight;
+  m.style.left = Math.max(8, Math.min(window.innerWidth-w-8, r.right-w))+'px';
+  m.style.top  = (r.bottom+6+hh > window.innerHeight ? Math.max(8, r.top-hh-6) : r.bottom+6)+'px';
+  const off = e=>{ if(!m.contains(e.target)){ m.remove(); document.removeEventListener('pointerdown', off, true); } };
+  setTimeout(()=>document.addEventListener('pointerdown', off, true), 0);
+  m.querySelectorAll('button[data-i]').forEach(b=>{
+    b.onclick = ()=>{ m.remove(); document.removeEventListener('pointerdown', off, true); items[+b.dataset.i].act(); };
+  });
+}
+function promptDate(title, label, def){
+  return new Promise(res=>{
+    let done=false;
+    openSheet({
+      title,
+      body:`<div class="field"><label class="lab">${label}</label><input id="pdt" class="inp" type="date" value="${def||''}"></div>`,
+      footer:`<span class="sp"></span><button class="btn" data-close>取消</button><button class="btn pri" data-ok>確定</button>`,
+      onMount(ov, close){ ov.querySelector('[data-ok]').onclick=()=>{ done=true; const v=ov.querySelector('#pdt').value; close(); res(v); }; },
+      onClose(){ if(!done) res(null); }
+    });
+  });
+}
+function summaryText(p){
+  const L=[];
+  L.push(`${p.name||''} ${p.mrn?'('+p.mrn+')':''}`.trim());
+  const l2=[ageSexOf(p), p.vs?'VS '+p.vs:'', p.bed||''].filter(Boolean).join(' · ');
+  if(l2) L.push(l2);
+  const d=admitDateOf(p); if(d) L.push((p.status==='er'?'ER since ':'Admission since ')+d);
+  const add=(t,body)=>{ if(body && body.trim()){ L.push(''); L.push('# '+t); L.push(body.trim()); } };
+  add('Medical history', (p.history||[]).map(x=>'- '+x).join('\n'));
+  add('Present illness', [piNarrative(p.pi), p.pi.text, signNarrative(p.pi)].filter(Boolean).join('\n'));
+  add('Medication', (p.meds||[]).map(m=>`- ${m.name} ${m.route||''} ${m.dose||''} ${m.freq||''}${m.route==='IF'&&m.rate?' @'+m.rate:''}${m.hold?' [hold '+m.hold+']':''}`.replace(/\s+/g,' ').trim()).join('\n'));
+  add('Vital signs', (p.vitals||[]).map(v=>`- ${v.t||''} T ${v.T||'-'} P ${v.P||'-'} R ${v.R||'-'} BP ${v.BP||'-'} SpO2 ${v.SpO2||'-'}${v.O2?' ('+v.O2+')':''}`).join('\n'));
+  if(p.labs.items.length && p.labs.cols.length){
+    const cols=p.labs.cols.slice().sort();
+    add('Lab data', [['項目',...cols].join('\t')].concat(
+      p.labs.items.map(it=>[it.name+(it.unit?' ('+it.unit+')':''), ...cols.map(c=>p.labs.vals[it.name+'|'+c]||'')].join('\t'))).join('\n'));
+  }
+  add('Image / Exam', (p.exams||[]).map(e=>`- ${e.type||''} ${e.date||''} ${e.title||''}\n  ${(e.findings||'').replace(/\n/g,'\n  ')}`.trimEnd()).join('\n'));
+  add('Assessment', (p.assessment||[]).map((x,i)=>`${i+1}. ${x}`).join('\n'));
+  add('Plan', (p.plan||[]).map((x,i)=>`${i+1}. ${x}`).join('\n'));
+  if(p.note) add('Note', p.note);
+  return L.join('\n');
+}
+async function copySummary(p){
+  const t = summaryText(p);
+  try{ await navigator.clipboard.writeText(t); toast('病摘已複製'); }
+  catch(e){
+    openSheet({title:'文字病摘', body:`<textarea class="inp" style="min-height:50vh;font-family:var(--mono);font-size:12.5px">${h(t)}</textarea>`,
+      footer:'<span class="sp"></span><button class="btn" data-close>關閉</button>'});
+  }
+}
+
+/* =========================================================================
+ *  編輯器
+ * ========================================================================= */
+function openEditor(kind, p, done){
+  const E = EDITORS[kind];
+  if(!E) return;
+  openSheet({
+    title: E.title, sub: `${p.name||''} ${p.mrn||''}`.trim() || undefined,
+    wide: !!E.wide,
+    body: E.body(p),
+    footer: `<span class="sp"></span><button class="btn" data-close>取消</button><button class="btn pri" data-ok>儲存</button>`,
+    onMount(ov, close){
+      const root = ov.querySelector('.sh-b');
+      if(E.mount) E.mount(root, p, ov);
+      ov.querySelector('[data-ok]').onclick = async ()=>{
+        const err = E.collect(root, p);
+        if(err){ toast(err, true); return; }
+        close();
+        await savePatient(p);
+        if(done) done();
+      };
+    }
+  });
+}
+/* 共用：可增刪的列。onRow 會對既有與新加入的列各跑一次 */
+function rowsMount(root, mkRow, onRow){
+  const box = root.querySelector('[data-rows]');
+  const add = root.querySelector('[data-add]');
+  function bind(el){
+    el.querySelector('[data-del]').onclick = ()=> el.remove();
+    if(onRow) onRow(el);
+  }
+  Array.from(box.children).forEach(bind);
+  if(add) add.onclick = ()=>{
+    const d = document.createElement('div');
+    d.innerHTML = mkRow();
+    const el = d.firstElementChild;
+    box.appendChild(el); bind(el);
+    const f = el.querySelector('input,select,textarea'); if(f) f.focus();
+    el.scrollIntoView({block:'nearest'});
+  };
+}
+const rowShell = (title, inner) => `<div class="erow" data-row>
+  <div class="eh"><b>${title}</b><button class="del" data-del aria-label="刪除">${svgIcon(ICO.trash)}</button></div>${inner}</div>`;
+const linesEditor = (arrName, ph) => ({
+  body(p){ return `<div class="field">
+      <label class="lab">一行一項</label>
+      <textarea class="inp" data-f style="min-height:200px" placeholder="${ph}">${h((p[arrName]||[]).join('\n'))}</textarea>
+      <p class="hintline">顯示時會自動編號／加項目符號。</p></div>`; },
+  collect(root, p){ p[arrName] = root.querySelector('[data-f]').value.split('\n').map(s=>s.trim()).filter(Boolean); }
+});
+
+const EDITORS = {
+  /* ---- 基本資料 ---- */
+  base:{
+    title:'基本資料',
+    body(p){ return `
+      <div class="row"><div class="field"><label class="lab">病歷號</label>
+        <input class="inp mono" data-f="mrn" value="${h(p.mrn)}" inputmode="numeric" autocapitalize="off" spellcheck="false"></div>
+      <div class="field"><label class="lab">姓名</label><input class="inp" data-f="name" value="${h(p.name)}"></div></div>
+      <div class="row"><div class="field"><label class="lab">年齡</label>
+        <input class="inp" data-f="age" value="${h(p.age)}" inputmode="numeric"></div>
+      <div class="field"><label class="lab">性別</label>
+        <div class="seg" data-seg="sex">
+          <button type="button" data-v="M" class="${p.sex==='M'?'on':''}">Male</button>
+          <button type="button" data-v="F" class="${p.sex==='F'?'on':''}">Female</button>
+        </div></div></div>
+      <div class="row"><div class="field"><label class="lab">VS <span class="op">主治醫師</span></label>
+        <input class="inp" data-f="vs" value="${h(p.vs)}"></div>
+      <div class="field"><label class="lab">床號 <span class="op">選填</span></label>
+        <input class="inp" data-f="bed" value="${h(p.bed)}" placeholder="8A-12"></div></div>
+      <div class="field"><label class="lab">狀態</label>
+        <div class="seg hot" data-seg="status">
+          <button type="button" data-v="er" class="${p.status==='er'?'on':''}">急診</button>
+          <button type="button" data-v="ward" class="${p.status==='ward'?'on':''}">住院</button>
+        </div></div>
+      <div class="row"><div class="field"><label class="lab">來診日期</label>
+        <input class="inp" data-f="er_date" type="date" value="${h(p.er_date)}"></div>
+      <div class="field"><label class="lab">住院日期 <span class="op">選填</span></label>
+        <input class="inp" data-f="adm_date" type="date" value="${h(p.adm_date)}"></div></div>
+      <div class="field"><label class="lab">追蹤</label>
+        <div class="seg" data-seg="tracking">
+          <button type="button" data-v="1" class="${p.tracking?'on':''}">持續追蹤</button>
+          <button type="button" data-v="0" class="${p.tracking?'':'on'}">結束追蹤</button>
+        </div>
+        <p class="hintline">結束追蹤只是移到「已結束」分頁，資料不會刪除。</p></div>`; },
+    mount(root){
+      root.querySelectorAll('[data-seg]').forEach(seg=>{
+        seg.querySelectorAll('button').forEach(b=> b.onclick = ()=>{
+          seg.querySelectorAll('button').forEach(x=>x.classList.remove('on')); b.classList.add('on');
+        });
+      });
+    },
+    collect(root, p){
+      ['mrn','name','age','vs','bed','er_date','adm_date'].forEach(k=>{
+        p[k] = root.querySelector(`[data-f="${k}"]`).value.trim();
+      });
+      const seg = n => { const b = root.querySelector(`[data-seg="${n}"] button.on`); return b?b.dataset.v:''; };
+      p.sex = seg('sex'); p.status = seg('status')||'er'; p.tracking = seg('tracking')==='1';
+      if(p.status==='ward' && !p.adm_date) p.adm_date = p.er_date || todayStr();
+      if(!p.name && !p.mrn) return '至少要填病歷號或姓名';
+    }
+  },
+
+  /* ---- 病史 ---- */
+  history: Object.assign({title:'Medical history 病史'}, linesEditor('history','DM type 2\nHTN\ns/p laparoscopic cholecystectomy 2019')),
+
+  /* ---- 現病史 ---- */
+  pi:{
+    title:'Present illness 現病史', wide:true,
+    body(p){
+      const pi = p.pi;
+      const symRow = s=>{
+        const v = pi.symptoms[s.k]||{};
+        return `<div class="sym ${v.on?'on':''}" data-sym="${s.k}">
+          <div class="sh">
+            <button type="button" class="ckbox ${v.on?'on':''}" data-ck>${svgIcon(ICO.check,3)}</button>
+            <span class="nm">${s.en}<small>${s.zh}</small></span>
+            <span class="days"><input class="inp mini" data-d value="${h(v.days??'')}" inputmode="numeric" placeholder="—"> 天</span>
+          </div>
+          <div class="sb">
+            ${s.loc?`<span class="fx"><input class="inp mini" data-loc list="dl-region" value="${h(v.loc||'')}" placeholder="位置（RLQ…）"></span>`:''}
+            ${s.course?`<span class="fx"><select class="inp mini" data-course>
+                <option value="">病程—</option>${COURSES.map(c=>`<option ${v.course===c?'selected':''}>${c}</option>`).join('')}
+              </select></span>`:''}
+          </div></div>`;
+      };
+      const signRow = s=>{
+        const v = pi.signs[s.k]||{};
+        return `<div class="sym ${v.v==='pos'?'on':''}" data-sign="${s.k}">
+          <div class="sh">
+            <span class="nm">${s.en}<small>${s.zh}</small></span>
+            <span class="tri" data-tri>
+              <button type="button" data-v="pos" class="${v.v==='pos'?'on':''}">(+)</button>
+              <button type="button" data-v="neg" class="${v.v==='neg'?'on':''}">(−)</button>
+            </span>
+          </div>
+          ${(s.loc||s.sev||s.side)?`<div class="sb">
+            ${s.side?`<span class="fx"><select class="inp mini" data-side><option value="">左右—</option>
+              ${['Rt','Lt','both'].map(x=>`<option ${v.side===x?'selected':''}>${x}</option>`).join('')}</select></span>`:''}
+            ${s.loc?`<span class="fx"><input class="inp mini" data-loc list="dl-region" value="${h(v.loc||'')}" placeholder="位置"></span>`:''}
+            ${s.sev?`<span class="fx"><select class="inp mini" data-sev><option value="">程度—</option>
+              ${SEVERITY.map(x=>`<option ${v.sev===x?'selected':''}>${x}</option>`).join('')}</select></span>`:''}
+          </div>`:''}
+        </div>`;
+      };
+      const bs = pi.signs.bowel_sound||{};
+      return `<datalist id="dl-region">${REGIONS.map(r=>`<option value="${r}">`).join('')}</datalist>
+      <div class="field"><label class="lab">Symptoms 症狀 <span class="op">勾選後填天數</span></label>
+        ${SYMPTOMS.map(symRow).join('')}</div>
+      <div class="field"><label class="lab">NPO since</label>
+        <input class="inp" data-npo type="date" value="${h(pi.npo_since||'')}"></div>
+      <div class="field"><label class="lab">Signs 理學檢查</label>
+        ${SIGNS.map(signRow).join('')}
+        <div class="sym"><div class="sh"><span class="nm">Bowel sound<small>腸蠕動音</small></span>
+          <span style="flex:none;width:150px"><select class="inp mini" data-bowel>
+            <option value="">未評估</option>${BOWEL.map(b=>`<option ${bs.v===b?'selected':''}>${b}</option>`).join('')}
+          </select></span></div></div>
+      </div>
+      <div class="field"><label class="lab">補充敘述 <span class="op">選填，會接在自動產生的句子後面</span></label>
+        <textarea class="inp" data-text placeholder="其他病程描述、外院處置、相關陰性表現…">${h(pi.text||'')}</textarea></div>
+      <div class="field"><label class="lab">預覽</label>
+        <div class="err ok" id="pi-prev" style="margin:0"></div></div>`;
+    },
+    mount(root, p){
+      const prev = ()=>{
+        const tmp = EDITORS.pi._read(root);
+        const a = piNarrative(tmp), b = signNarrative(tmp);
+        $('#pi-prev', root).innerHTML = (a||b) ? h(a)+(b?'<br><b>Signs:</b> '+h(b):'') : '<span style="color:var(--muted)">勾選症狀後這裡會出現英文敘述</span>';
+      };
+      root.querySelectorAll('[data-sym]').forEach(el=>{
+        const ck = el.querySelector('[data-ck]');
+        ck.onclick = ()=>{
+          const on = !ck.classList.contains('on');
+          ck.classList.toggle('on', on); el.classList.toggle('on', on);
+          if(on){ const d = el.querySelector('[data-d]'); if(d && !d.value) d.focus(); }
+          prev();
+        };
+        el.querySelectorAll('input,select').forEach(f=> f.oninput = ()=>{
+          if(f.value && !ck.classList.contains('on')){ ck.classList.add('on'); el.classList.add('on'); }
+          prev();
+        });
+      });
+      root.querySelectorAll('[data-sign]').forEach(el=>{
+        el.querySelectorAll('[data-tri] button').forEach(b=> b.onclick = ()=>{
+          const was = b.classList.contains('on');
+          el.querySelectorAll('[data-tri] button').forEach(x=>x.classList.remove('on'));
+          if(!was) b.classList.add('on');
+          el.classList.toggle('on', !was && b.dataset.v==='pos');
+          prev();
+        });
+        el.querySelectorAll('input,select').forEach(f=> f.oninput = prev);
+      });
+      const bw = root.querySelector('[data-bowel]'); if(bw) bw.onchange = prev;
+      prev();
+    },
+    _read(root){
+      const pi = { symptoms:{}, signs:{}, npo_since:'', text:'' };
+      root.querySelectorAll('[data-sym]').forEach(el=>{
+        const k = el.dataset.sym;
+        const on = el.querySelector('[data-ck]').classList.contains('on');
+        const d  = el.querySelector('[data-d]').value.trim();
+        const loc = el.querySelector('[data-loc]') ? el.querySelector('[data-loc]').value.trim() : '';
+        const co  = el.querySelector('[data-course]') ? el.querySelector('[data-course]').value : '';
+        if(on || d || loc || co) pi.symptoms[k] = {on, days:d, loc, course:co};
+      });
+      root.querySelectorAll('[data-sign]').forEach(el=>{
+        const k = el.dataset.sign;
+        const b = el.querySelector('[data-tri] button.on');
+        const o = { v: b?b.dataset.v:'' };
+        const g = s => el.querySelector(s) ? el.querySelector(s).value.trim() : '';
+        o.loc = g('[data-loc]'); o.sev = g('[data-sev]'); o.side = g('[data-side]');
+        if(o.v) pi.signs[k] = o;
+      });
+      const bw = root.querySelector('[data-bowel]');
+      if(bw && bw.value) pi.signs.bowel_sound = {v: bw.value};
+      pi.npo_since = root.querySelector('[data-npo]').value;
+      pi.text = root.querySelector('[data-text]').value.trim();
+      return pi;
+    },
+    collect(root, p){ p.pi = EDITORS.pi._read(root); }
+  },
+
+  /* ---- 用藥 ---- */
+  meds:{
+    title:'Medication 用藥', wide:true,
+    _row(m){
+      m = m||{};
+      return rowShell('藥物', `
+        <div class="field"><input class="inp" data-name value="${h(m.name||'')}" placeholder="藥名 (Ceftriaxone)"></div>
+        <div class="row"><div class="field" style="margin:0 0 9px">
+            <select class="inp" data-route>${ROUTES.map(r=>`<option ${((m.route||'PO')===r)?'selected':''}>${r}</option>`).join('')}</select></div>
+          <div class="field" style="margin:0 0 9px"><input class="inp" data-dose value="${h(m.dose||'')}" placeholder="劑量 1 g"></div>
+          <div class="field" style="margin:0 0 9px"><input class="inp" data-freq list="dl-freq" value="${h(m.freq||'')}" placeholder="頻率 Q12H"></div></div>
+        <div class="row"><div class="field" style="margin:0 0 9px" data-ratewrap>
+            <input class="inp" data-rate value="${h(m.rate||'')}" placeholder="流速 20 mL/hr（IF）"></div>
+          <div class="field" style="margin:0 0 9px"><input class="inp" data-hold type="date" value="${h(m.hold||'')}" placeholder="hold 日期"></div></div>
+        <div class="field" style="margin:0"><input class="inp" data-note value="${h(m.note||'')}" placeholder="備註（選填）"></div>`);
+    },
+    body(p){ return `<datalist id="dl-freq">${FREQS.map(f=>`<option value="${f}">`).join('')}</datalist>
+      <div data-rows>${(p.meds||[]).map(m=>EDITORS.meds._row(m)).join('')}</div>
+      <button class="addrow" data-add>${svgIcon(ICO.plus,2.4)} 新增藥物</button>
+      <p class="hintline">hold 日期填了之後，卡片上該藥會標示 Hold since；流速只在途徑選 IF 時顯示。</p>`; },
+    mount(root){
+      const sync = el=>{
+        const r = el.querySelector('[data-route]').value;
+        el.querySelector('[data-ratewrap]').style.display = r==='IF' ? '' : 'none';
+      };
+      rowsMount(root, ()=>EDITORS.meds._row(), el=>{
+        const s = el.querySelector('[data-route]');
+        s.onchange = ()=> sync(el);
+        sync(el);
+      });
+    },
+    collect(root, p){
+      p.meds = Array.from(root.querySelectorAll('[data-row]')).map(el=>{
+        const g = s=>{ const f = el.querySelector(s); return f?f.value.trim():''; };
+        return { name:g('[data-name]'), route:g('[data-route]'), dose:g('[data-dose]'),
+                 freq:g('[data-freq]'), rate:g('[data-rate]'), hold:g('[data-hold]'), note:g('[data-note]') };
+      }).filter(m=>m.name);
+    }
+  },
+
+  /* ---- 生命徵象 ---- */
+  vitals:{
+    title:'Vital signs 生命徵象', wide:true,
+    _row(v){
+      v = v||{t:nowStamp()};
+      return rowShell('時間點', `
+        <div class="field"><input class="inp" data-t value="${h(v.t||'')}" placeholder="2026-08-03 08:00"></div>
+        <div class="row"><div class="field" style="margin:0 0 9px"><input class="inp" data-T value="${h(v.T||'')}" placeholder="T 36.8" inputmode="decimal"></div>
+          <div class="field" style="margin:0 0 9px"><input class="inp" data-P value="${h(v.P||'')}" placeholder="P 88" inputmode="numeric"></div>
+          <div class="field" style="margin:0 0 9px"><input class="inp" data-R value="${h(v.R||'')}" placeholder="R 18" inputmode="numeric"></div></div>
+        <div class="row"><div class="field" style="margin:0"><input class="inp" data-BP value="${h(v.BP||'')}" placeholder="BP 128/76"></div>
+          <div class="field" style="margin:0"><input class="inp" data-SpO2 value="${h(v.SpO2||'')}" placeholder="SpO₂ 97%"></div>
+          <div class="field" style="margin:0"><input class="inp" data-O2 value="${h(v.O2||'')}" placeholder="O₂ RA / NC 3L"></div></div>`);
+    },
+    body(p){ return `<div data-rows>${(p.vitals||[]).slice().sort((a,b)=>String(b.t||'').localeCompare(String(a.t||''))).map(v=>EDITORS.vitals._row(v)).join('')}</div>
+      <button class="addrow" data-add>${svgIcon(ICO.plus,2.4)} 新增時間點</button>
+      <p class="hintline">時間格式建議 <span class="mono">YYYY-MM-DD HH:MM</span>，顯示時會由新到舊排序。</p>`; },
+    mount(root){ rowsMount(root, ()=>EDITORS.vitals._row()); },
+    collect(root, p){
+      p.vitals = Array.from(root.querySelectorAll('[data-row]')).map(el=>{
+        const g = s=> el.querySelector(s).value.trim();
+        return { t:g('[data-t]'), T:g('[data-T]'), P:g('[data-P]'), R:g('[data-R]'),
+                 BP:g('[data-BP]'), SpO2:g('[data-SpO2]'), O2:g('[data-O2]') };
+      }).filter(v=> v.t || v.T || v.P || v.R || v.BP || v.SpO2);
+    }
+  },
+
+  /* ---- 檢驗 ---- */
+  labs:{
+    title:'Lab data 檢驗', wide:true,
+    body(p){
+      const L = p.labs;
+      return `<div class="field"><label class="lab">時間欄</label>
+        <div class="chips" data-cols>${L.cols.slice().sort().map(c=>
+          `<span class="chip on" data-col="${h(c)}">${h(c)} <button type="button" data-rmcol style="margin-left:4px">✕</button></span>`).join('')
+          || '<span class="hintline" style="margin:0">還沒有時間欄</span>'}</div>
+        <div class="row" style="margin-top:8px"><input class="inp" id="lb-newcol" placeholder="2026-08-03 06:00">
+          <button class="btn" id="lb-addcol" style="flex:none">加時間</button></div></div>
+      <div class="field"><label class="lab">檢驗表 <span class="op">列＝項目、欄＝時間</span></label>
+        <div class="tscroll" style="margin:0;border:1px solid var(--line);border-radius:var(--r-sm)">
+          <table class="gt" id="lb-grid"></table></div></div>
+      <div class="row"><div class="field" style="flex:2"><input class="inp" id="lb-newitem" placeholder="項目 WBC"></div>
+        <div class="field"><input class="inp" id="lb-newunit" placeholder="單位 K/µL"></div>
+        <div class="field" style="flex:none"><button class="btn" id="lb-additem">加項目</button></div></div>
+      <div class="field"><button class="btn sm" id="lb-paste">貼上檢驗報告文字自動帶入</button>
+        <p class="hintline">數值後面加 <span class="mono">H</span> 或 <span class="mono">L</span>（例：<span class="mono">12.3 H</span>）會標成紅／藍。</p></div>`;
+    },
+    mount(root, p){
+      const L = JSON.parse(JSON.stringify(p.labs));
+      const grid = root.querySelector('#lb-grid');
+      function paint(){
+        const cols = L.cols.slice().sort();
+        grid.innerHTML = `<thead><tr><th class="stick">項目</th>${cols.map(c=>`<th>${h(c)}</th>`).join('')}</tr></thead>
+          <tbody>${L.items.map((it,i)=>`<tr>
+            <td class="stick"><div style="display:flex;align-items:center;gap:5px">
+              <button class="del" data-rmitem="${i}" style="width:22px;height:22px">${svgIcon(ICO.x,2.4)}</button>
+              <span>${h(it.name)}${it.unit?`<span class="u">${h(it.unit)}</span>`:''}</span></div></td>
+            ${cols.map(c=>`<td><input class="inp mini" style="width:96px;height:30px;padding:0 7px"
+               data-cell data-k="${h(it.name+'|'+c)}" value="${h(L.vals[it.name+'|'+c]||'')}"></td>`).join('')}
+          </tr>`).join('') || `<tr><td class="stick" style="color:var(--muted)">尚無項目</td></tr>`}</tbody>`;
+        grid.querySelectorAll('[data-cell]').forEach(f=> f.oninput = ()=>{
+          const v = f.value.trim();
+          if(v) L.vals[f.dataset.k] = v; else delete L.vals[f.dataset.k];
+        });
+        grid.querySelectorAll('[data-rmitem]').forEach(b=> b.onclick = ()=>{
+          const it = L.items[+b.dataset.rmitem];
+          L.items.splice(+b.dataset.rmitem,1);
+          Object.keys(L.vals).forEach(k=>{ if(k.startsWith(it.name+'|')) delete L.vals[k]; });
+          paint();
+        });
+        const cbox = root.querySelector('[data-cols]');
+        cbox.innerHTML = cols.map(c=>`<span class="chip on" data-col="${h(c)}">${h(c)}
+          <button type="button" data-rmcol style="margin-left:4px;color:inherit">✕</button></span>`).join('')
+          || '<span class="hintline" style="margin:0">還沒有時間欄</span>';
+        cbox.querySelectorAll('[data-rmcol]').forEach(b=> b.onclick = ()=>{
+          const c = b.parentElement.dataset.col;
+          L.cols = L.cols.filter(x=>x!==c);
+          Object.keys(L.vals).forEach(k=>{ if(k.endsWith('|'+c)) delete L.vals[k]; });
+          paint();
+        });
+      }
+      root.querySelector('#lb-addcol').onclick = ()=>{
+        const f = root.querySelector('#lb-newcol'); const v = f.value.trim();
+        if(!v) return; if(!L.cols.includes(v)) L.cols.push(v);
+        f.value=''; paint();
+      };
+      root.querySelector('#lb-additem').onclick = ()=>{
+        const f = root.querySelector('#lb-newitem'), u = root.querySelector('#lb-newunit');
+        const v = f.value.trim(); if(!v) return;
+        if(!L.items.some(x=>x.name===v)) L.items.push({name:v, unit:u.value.trim()});
+        f.value=''; u.value=''; paint(); f.focus();
+      };
+      root.querySelector('#lb-paste').onclick = ()=> pasteLabs(L, paint);
+      root._L = L;
+      paint();
+    },
+    collect(root, p){ p.labs = root._L; }
+  },
+
+  /* ---- 影像檢查 ---- */
+  exams:{
+    title:'Image / Exam 影像檢查', wide:true,
+    _row(e){
+      e = e||{type:'CT', date:todayStr()};
+      return rowShell('檢查', `
+        <div class="row"><div class="field" style="margin:0 0 9px">
+            <select class="inp" data-type>${EXAM_TYPES.map(t=>`<option ${e.type===t?'selected':''}>${t}</option>`).join('')}</select></div>
+          <div class="field" style="margin:0 0 9px"><input class="inp" data-date type="date" value="${h(e.date||'')}"></div></div>
+        <div class="field"><input class="inp" data-title value="${h(e.title||'')}" placeholder="標題（CT abdomen with contrast）"></div>
+        <div class="field" style="margin:0"><textarea class="inp" data-find placeholder="Findings / impression">${h(e.findings||'')}</textarea></div>`);
+    },
+    body(p){ return `<div data-rows>${(p.exams||[]).map(e=>EDITORS.exams._row(e)).join('')}</div>
+      <button class="addrow" data-add>${svgIcon(ICO.plus,2.4)} 新增檢查</button>`; },
+    mount(root){ rowsMount(root, ()=>EDITORS.exams._row()); },
+    collect(root, p){
+      p.exams = Array.from(root.querySelectorAll('[data-row]')).map(el=>{
+        const g = s=> el.querySelector(s).value.trim();
+        return { type:g('[data-type]'), date:g('[data-date]'), title:g('[data-title]'), findings:g('[data-find]') };
+      }).filter(e=> e.title || e.findings);
+    }
+  },
+
+  assessment: Object.assign({title:'Assessment 評估'}, linesEditor('assessment','Acute appendicitis with localized peritonitis\nDM type 2, poorly controlled')),
+  plan:       Object.assign({title:'Plan 計畫'},      linesEditor('plan','NPO, IV hydration\nEmergent laparoscopic appendectomy\nCefmetazole 1g Q8H')),
+  note:{
+    title:'Note 備註',
+    body(p){ return `<div class="field"><textarea class="inp" data-f style="min-height:200px">${h(p.note||'')}</textarea></div>`; },
+    collect(root, p){ p.note = root.querySelector('[data-f]').value.trim(); }
+  }
+};
+
+/* 貼上檢驗報告文字 → 解析成項目/數值 */
+function pasteLabs(L, paint){
+  openSheet({
+    title:'貼上檢驗報告',
+    body:`<div class="field"><label class="lab">時間欄</label>
+        <input class="inp" id="pl-col" value="${h(nowStamp())}"></div>
+      <div class="field"><label class="lab">報告文字</label>
+        <textarea class="inp" id="pl-txt" style="min-height:200px" placeholder="WBC 12.3 H&#10;Hb 9.8 L&#10;Platelet 233&#10;CRP 14.2"></textarea>
+        <p class="hintline">一行一項，格式為「項目 數值 [單位] [H/L]」，用空白或冒號分隔皆可。</p></div>`,
+    footer:`<span class="sp"></span><button class="btn" data-close>取消</button><button class="btn pri" data-ok>帶入</button>`,
+    onMount(ov, close){
+      ov.querySelector('[data-ok]').onclick = ()=>{
+        const col = ov.querySelector('#pl-col').value.trim() || nowStamp();
+        const txt = ov.querySelector('#pl-txt').value;
+        let n = 0;
+        txt.split('\n').forEach(line=>{
+          const s = line.trim(); if(!s) return;
+          const m = s.match(/^(.+?)[\s:：]+(-?\d+(?:\.\d+)?)\s*([A-Za-zµ%\/\^\d]*)?\s*(H|L)?$/);
+          if(!m) return;
+          const name = m[1].trim(), val = m[2], unit = (m[3]||'').trim(), flag = m[4]||'';
+          if(!L.items.some(x=>x.name===name)) L.items.push({name, unit});
+          else if(unit){ const it = L.items.find(x=>x.name===name); if(!it.unit) it.unit = unit; }
+          L.vals[name+'|'+col] = val + (flag?' '+flag:'');
+          n++;
+        });
+        if(!L.cols.includes(col)) L.cols.push(col);
+        close(); paint();
+        toast(n?`帶入 ${n} 個項目`:'沒有解析到可用的資料', !n);
+      };
+    }
+  });
+}
+
+/* =========================================================================
+ *  匯入 / 匯出
+ * ========================================================================= */
+function mergePatient(dst, src){
+  const simple = ['mrn','name','sex','age','vs','bed','status','er_date','adm_date','note'];
+  simple.forEach(k=>{ if(src[k]!=null && src[k]!=='') dst[k]=src[k]; });
+  if(typeof src.tracking === 'boolean') dst.tracking = src.tracking;
+  ['history','assessment','plan'].forEach(k=>{ if(Array.isArray(src[k]) && src[k].length) dst[k]=src[k]; });
+  if(src.pi){
+    dst.pi = dst.pi||{symptoms:{},signs:{},npo_since:'',text:''};
+    if(src.pi.symptoms) dst.pi.symptoms = Object.assign({}, dst.pi.symptoms, src.pi.symptoms);
+    if(src.pi.signs)    dst.pi.signs    = Object.assign({}, dst.pi.signs, src.pi.signs);
+    if(src.pi.npo_since!=null && src.pi.npo_since!=='') dst.pi.npo_since = src.pi.npo_since;
+    if(src.pi.text) dst.pi.text = src.pi.text;
+  }
+  if(Array.isArray(src.meds) && src.meds.length) dst.meds = src.meds;
+  if(Array.isArray(src.vitals) && src.vitals.length){
+    const by = {}; (dst.vitals||[]).forEach(v=> by[v.t]=v);
+    src.vitals.forEach(v=> by[v.t] = Object.assign(by[v.t]||{}, v));
+    dst.vitals = Object.values(by);
+  }
+  if(Array.isArray(src.exams) && src.exams.length){
+    const key = e=> (e.type||'')+'|'+(e.date||'')+'|'+(e.title||'');
+    const by = {}; (dst.exams||[]).forEach(e=> by[key(e)]=e);
+    src.exams.forEach(e=> by[key(e)] = Object.assign(by[key(e)]||{}, e));
+    dst.exams = Object.values(by);
+  }
+  if(src.labs){
+    dst.labs = dst.labs||{items:[],cols:[],vals:{}};
+    (src.labs.items||[]).forEach(it=>{
+      const ex = dst.labs.items.find(x=>x.name===it.name);
+      if(!ex) dst.labs.items.push({name:it.name, unit:it.unit||''});
+      else if(it.unit && !ex.unit) ex.unit = it.unit;
+    });
+    (src.labs.cols||[]).forEach(c=>{ if(!dst.labs.cols.includes(c)) dst.labs.cols.push(c); });
+    Object.assign(dst.labs.vals, src.labs.vals||{});
+  }
+  return dst;
+}
+function parseImport(text){
+  let j;
+  try{ j = JSON.parse(text); }catch(e){ throw new Error('不是有效的 JSON：'+e.message); }
+  let arr = Array.isArray(j) ? j : (j.patients || (j.mrn||j.name ? [j] : null));
+  if(!Array.isArray(arr)) throw new Error('找不到 patients 陣列');
+  return arr;
+}
+async function doImport(arr){
+  let add=0, upd=0;
+  for(const raw of arr){
+    let dst = null;
+    if(raw.id) dst = ST.patients.find(p=>p.id===raw.id);
+    if(!dst && raw.mrn) dst = ST.patients.find(p=>p.mrn && p.mrn===raw.mrn);
+    if(dst){ mergePatient(dst, raw); upd++; await savePatient(dst, true); }
+    else{
+      const p = normalize(Object.assign(blankPatient(), {id: raw.id||uid()}));
+      mergePatient(p, raw);
+      if(raw.pi) p.pi = normalize({pi:raw.pi}).pi;
+      add++; await savePatient(p, true);
+    }
+  }
+  renderList();
+  toast(`匯入完成：新增 ${add}、更新 ${upd}`);
+}
+function importSheet(){
+  openSheet({
+    title:'匯入資料', wide:true,
+    body:`<div class="field"><label class="lab">從檔案</label>
+        <input id="im-file" class="inp" type="file" accept=".json,application/json" style="padding:7px 9px;height:auto"></div>
+      <div class="field"><label class="lab">或直接貼上 JSON</label>
+        <textarea id="im-txt" class="inp mono" style="min-height:200px;font-size:12.5px"
+          placeholder='{"format":"patient-list.import","version":1,"patients":[…]}'></textarea></div>
+      <div id="im-msg" class="hintline">以 <span class="mono">id</span> 比對，沒有就用 <span class="mono">mrn</span>（病歷號）比對；比對到就合併更新，比對不到就新增。轉檔工具見 repo 的 <span class="mono">tools/</span>。</div>`,
+    footer:`<span class="sp"></span><button class="btn" data-close>取消</button><button class="btn pri" data-ok>匯入</button>`,
+    onMount(ov, close){
+      const f = ov.querySelector('#im-file'), t = ov.querySelector('#im-txt');
+      f.onchange = ()=>{
+        const file = f.files[0]; if(!file) return;
+        const r = new FileReader();
+        r.onload = ()=>{ t.value = r.result; };
+        r.readAsText(file);
+      };
+      ov.querySelector('[data-ok]').onclick = async ()=>{
+        try{
+          const arr = parseImport(t.value);
+          close();
+          await doImport(arr);
+        }catch(e){
+          const m = ov.querySelector('#im-msg');
+          m.className='err'; m.textContent = e.message;
+        }
+      };
+    }
+  });
+}
+async function exportAll(){
+  const ok = await confirmSheet('匯出 JSON',
+    '匯出的檔案是<b>未加密的明文</b>，裡面有病歷號與姓名。請只存在你自己控制的裝置，用完就刪。', '我知道，匯出');
+  if(!ok) return;
+  const blob = new Blob([JSON.stringify({format:'patient-list.import', version:1,
+    exported_at:new Date().toISOString(), patients:ST.patients}, null, 2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `patient-list-${todayStr()}.json`;
+  a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href), 4000);
+}
+
+/* =========================================================================
+ *  主選單
+ * ========================================================================= */
+function mainMenu(anchor){
+  const items = [
+    {t:'匯入資料', ico:'<path d="M12 3v12M7 10l5 5 5-5M4 21h16"/>', act:importSheet},
+    {t:'匯出 JSON', ico:'<path d="M12 21V9M7 14l5-5 5 5M4 3h16"/>', act:exportAll},
+    {sep:true},
+    {t:'鎖定（清除本機金鑰）', ico:'<rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/>', act:lockNow},
+    {t:'更換資料密碼', ico:'<path d="M12 3v3M12 18v3M3 12h3M18 12h3"/><circle cx="12" cy="12" r="4"/>', act:changeDataPw}
+  ];
+  if(!DEMO) items.push({t:'登出', dang:true, ico:'<path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3M10 17l-5-5 5-5M5 12h11"/>', act:signOut});
+  items.push({sep:true});
+  items.push({t:'關於與說明', ico:'<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>', act:aboutSheet});
+  popMenu(anchor, items);
+}
+function aboutSheet(){
+  openSheet({title:'關於 Patient List', body:`
+    <p style="margin:0 0 12px;font-size:14px;line-height:1.7">
+    病人內容在你的瀏覽器內用 <b>AES-GCM 256</b> 加密後才送上雲端，金鑰由「資料密碼」以 PBKDF2（${ITERS.toLocaleString()} 次）導出，
+    <b>永遠不會離開這台裝置</b>。因此伺服器、資料庫管理後台、以及任何拿到資料庫的人，都只看得到密文。</p>
+    <p style="margin:0 0 12px;font-size:14px;line-height:1.7">
+    代價是：<b>忘記資料密碼就解不開既有資料</b>，沒有任何救回的辦法。搜尋與排序也一律在本機做，所以第一次開啟時會把全部病人載下來。</p>
+    <ul class="lines" style="font-size:13.5px">
+      <li>結束追蹤只是移到「已結束」分頁，資料保留。</li>
+      <li>Lab 表格過寬時可以左右滑動，第一欄會固定。</li>
+      <li>匯出的 JSON 是明文，含可識別資料，請小心保存。</li>
+      <li>離線可開啟並瀏覽已載入的資料；修改需要連線。</li>
+    </ul>
+    <p class="hintline">版本 ${APPVER}${DEMO?' · 本機試用模式（資料只存在這台裝置的瀏覽器）':''}</p>`});
+}
+
+/* =========================================================================
+ *  帳號 / 解鎖流程
+ * ========================================================================= */
+const APPVER = '1.0.0';
+function show(id){
+  ['scr-setup','scr-auth','scr-lock','app'].forEach(x=> $('#'+x).classList.toggle('hide', x!==id));
+}
+function getCfg(){
+  if(CONFIG.SUPABASE_URL && CONFIG.SUPABASE_ANON_KEY) return {...CONFIG};
+  try{ return JSON.parse(localStorage.getItem(LS.cfg)||'null'); }catch(e){ return null; }
+}
+async function boot(){
+  if(!crypto.subtle){
+    document.body.innerHTML = '<div class="gate"><div class="gbox"><h1>無法啟動</h1><p class="lead">這個瀏覽器沒有提供 Web Crypto（通常是因為不是用 https 開啟）。請改用 https 網址。</p></div></div>';
+    return;
+  }
+  if(DEMO){ USERID='demo'; return gateLock(); }
+  const cfg = getCfg();
+  if(!cfg){ show('scr-setup'); return; }
+  if(typeof window.supabase === 'undefined'){
+    show('scr-setup'); $('#setup-err').classList.remove('hide');
+    $('#setup-err').textContent = '沒有載入到 Supabase 函式庫（vendor/supabase-2.111.0.min.js）。';
+    return;
+  }
+  sb = window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY, {
+    auth:{ persistSession:true, autoRefreshToken:true, detectSessionInUrl:true }
+  });
+  sb.auth.onAuthStateChange((evt, s)=>{
+    session = s;
+    if(evt==='SIGNED_OUT'){ KEY=null; show('scr-auth'); }
+  });
+  const { data } = await sb.auth.getSession();
+  session = data.session;
+  if(!session){ show('scr-auth'); return; }
+  USERID = session.user.id;
+  gateLock();
+}
+async function gateLock(){
+  const v = await DB.getVault().catch(e=>{ toast('讀取失敗：'+(e.message||e), true); return null; });
+  const first = !v;
+  $('#lock-h').textContent = first ? '設定資料密碼' : '輸入資料密碼';
+  $('#lock-lead').textContent = first
+    ? '請設定一組「資料密碼」。病人內容會用它在這台裝置上加密，雲端只存得到密文——連我也解不開。'
+    : '病人資料在這台裝置上加密後才上傳，雲端只存得到密文。請輸入你的資料密碼解鎖。';
+  $('#lk-pw2row').classList.toggle('hide', !first);
+  $('#lk-go').textContent = first ? '設定並繼續' : '解鎖';
+  $('#lock-hint').textContent = first
+    ? '資料密碼與登入密碼不同，永遠不會離開這台裝置。忘記就解不開既有資料，沒有救回的辦法——請自行記牢。'
+    : '換一台裝置就要再輸入一次。';
+  $('#lk-signout').parentElement.classList.toggle('hide', DEMO);
+
+  // 這台裝置記住過金鑰就直接進去
+  const saved = localStorage.getItem(LS.dk+USERID);
+  if(saved && v){
+    try{
+      KEY = await crypto.subtle.importKey('raw', unb64(saved), {name:'AES-GCM'}, true, ['encrypt','decrypt']);
+      await decJSON(v.verifier);
+      return enterApp();
+    }catch(e){ localStorage.removeItem(LS.dk+USERID); KEY=null; }
+  }
+  show('scr-lock');
+  $('#lock-err').classList.add('hide');
+  $('#lk-pw').value=''; $('#lk-pw2').value='';
+  setTimeout(()=>$('#lk-pw').focus(), 60);
+  $('#lk-go').onclick = ()=> doUnlock(first, v);
+}
+async function doUnlock(first, v){
+  const err = $('#lock-err');
+  const pw = $('#lk-pw').value;
+  err.classList.add('hide');
+  if(pw.length < 6){ err.textContent='資料密碼至少 6 個字。'; err.classList.remove('hide'); return; }
+  if(first && pw !== $('#lk-pw2').value){ err.textContent='兩次輸入的密碼不一樣。'; err.classList.remove('hide'); return; }
+  const btn = $('#lk-go'); btn.disabled = true; btn.textContent = '處理中…';
+  try{
+    if(first){
+      const salt = b64(crypto.getRandomValues(new Uint8Array(16)));
+      KEY = await deriveKey(pw, salt, ITERS);
+      const verifier = await encJSON({app:'patient-list', ok:true});
+      await DB.putVault({salt, verifier, iters:ITERS});
+    }else{
+      KEY = await deriveKey(pw, v.salt, v.iters||ITERS);
+      try{ await decJSON(v.verifier); }
+      catch(e){ KEY=null; throw new Error('資料密碼不對。'); }
+    }
+    if($('#lk-remember').getAttribute('aria-pressed')==='true'){
+      localStorage.setItem(LS.dk+USERID, b64(await crypto.subtle.exportKey('raw', KEY)));
+    }
+    await enterApp();
+  }catch(e){
+    err.textContent = e.message || String(e); err.classList.remove('hide');
+  }finally{
+    btn.disabled = false; btn.textContent = first ? '設定並繼續' : '解鎖';
+  }
+}
+function lockNow(){
+  if(USERID) localStorage.removeItem(LS.dk+USERID);
+  KEY = null; ST.patients = [];
+  gateLock();
+}
+async function signOut(){
+  if(!await confirmSheet('登出','登出後這台裝置上的資料金鑰也會一併清除，下次要重新輸入資料密碼。','登出')) return;
+  if(USERID) localStorage.removeItem(LS.dk+USERID);
+  KEY=null; ST.patients=[];
+  await sb.auth.signOut();
+  show('scr-auth');
+}
+async function changeDataPw(){
+  openSheet({
+    title:'更換資料密碼',
+    body:`<div id="cp-err" class="err hide"></div>
+      <p class="hintline" style="margin:0 0 12px">會用新密碼把<b>全部病人資料重新加密一次</b>，其他裝置下次開啟時要輸入新密碼。過程中請不要關掉頁面。</p>
+      <div class="field"><label class="lab">目前資料密碼</label><input id="cp-old" class="inp" type="password"></div>
+      <div class="field"><label class="lab">新資料密碼</label><input id="cp-new" class="inp" type="password"></div>
+      <div class="field"><label class="lab">再輸入一次</label><input id="cp-new2" class="inp" type="password"></div>`,
+    footer:`<span class="sp"></span><button class="btn" data-close>取消</button><button class="btn pri" data-ok>更換</button>`,
+    onMount(ov, close){
+      ov.querySelector('[data-ok]').onclick = async ()=>{
+        const err = ov.querySelector('#cp-err');
+        const o = ov.querySelector('#cp-old').value, n = ov.querySelector('#cp-new').value, n2 = ov.querySelector('#cp-new2').value;
+        err.classList.add('hide');
+        const fail = m=>{ err.textContent=m; err.classList.remove('hide'); };
+        if(n.length<6) return fail('新密碼至少 6 個字。');
+        if(n!==n2) return fail('兩次輸入的新密碼不一樣。');
+        const v = await DB.getVault();
+        try{
+          const oldKey = await deriveKey(o, v.salt, v.iters||ITERS);
+          await decJSON(v.verifier, oldKey);
+        }catch(e){ return fail('目前的資料密碼不對。'); }
+        const btn = ov.querySelector('[data-ok]'); btn.disabled=true; btn.textContent='重新加密中…';
+        try{
+          const salt = b64(crypto.getRandomValues(new Uint8Array(16)));
+          const newKey = await deriveKey(n, salt, ITERS);
+          for(const p of ST.patients) await DB.put(p.id, await encJSON(p, newKey));
+          await DB.putVault({salt, verifier: await encJSON({app:'patient-list', ok:true}, newKey), iters:ITERS});
+          KEY = newKey;
+          if(localStorage.getItem(LS.dk+USERID))
+            localStorage.setItem(LS.dk+USERID, b64(await crypto.subtle.exportKey('raw', KEY)));
+          close(); toast('資料密碼已更換');
+        }catch(e){ fail('更換失敗：'+(e.message||e)); btn.disabled=false; btn.textContent='更換'; }
+      };
+    }
+  });
+}
+async function enterApp(){
+  show('app');
+  setSync('busy','載入中…');
+  try{
+    const rows = await DB.list();
+    const out = [];
+    let bad = 0;
+    for(const r of rows){
+      try{ out.push(normalize(await decJSON(r.payload))); }
+      catch(e){ bad++; }
+    }
+    ST.patients = out;
+    setSync('ok', DEMO ? '本機試用' : '已同步');
+    if(bad) toast(`${bad} 筆資料解不開（可能是用別的資料密碼加密的）`, true);
+  }catch(e){
+    setSync('err','載入失敗');
+    toast('載入失敗：'+(e.message||e), true);
+  }
+  renderList();
+}
+
+/* ---------------- 登入畫面 ---------------- */
+let authMode = 'in';
+function setAuthMode(m){
+  authMode = m;
+  const isReset = m==='reset';
+  $('#au-pwrow').classList.toggle('hide', isReset);
+  $('#au-go').textContent = m==='in'?'登入': m==='up'?'註冊':'寄送重設信';
+  $('#auth-lead').textContent = m==='in'?'請登入以同步你的病人清單。'
+    : m==='up'?'用 Email 註冊一個帳號，之後在任何裝置都能登入。'
+    : '輸入註冊時的 Email，我們會寄一封重設密碼的信給你。';
+  $('#au-alt-t').textContent = m==='up'?'已經有帳號了？':'還沒有帳號？';
+  $('#au-alt').textContent = m==='up'?'改成登入':'註冊一個';
+  $('#au-reset').textContent = m==='reset'?'回到登入':'忘記密碼';
+  $('#auth-err').classList.add('hide'); $('#auth-ok').classList.add('hide');
+}
+function appUrl(){ return location.origin + location.pathname; }
+
+/* =========================================================================
+ *  事件
+ * ========================================================================= */
+$('#su-save').onclick = ()=>{
+  const url = $('#su-url').value.trim().replace(/\/+$/,''), key = $('#su-key').value.trim();
+  const err = $('#setup-err');
+  if(!/^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(url)){
+    err.textContent = 'Project URL 格式看起來不對，應該像 https://xxxx.supabase.co'; err.classList.remove('hide'); return;
+  }
+  if(key.length < 20){ err.textContent='金鑰看起來太短了。'; err.classList.remove('hide'); return; }
+  localStorage.setItem(LS.cfg, JSON.stringify({SUPABASE_URL:url, SUPABASE_ANON_KEY:key}));
+  location.reload();
+};
+$('#au-alt').onclick = ()=> setAuthMode(authMode==='up'?'in':'up');
+$('#au-reset').onclick = ()=> setAuthMode(authMode==='reset'?'in':'reset');
+$('#au-go').onclick = async ()=>{
+  const email = $('#au-email').value.trim(), pw = $('#au-pw').value;
+  const err = $('#auth-err'), ok = $('#auth-ok');
+  err.classList.add('hide'); ok.classList.add('hide');
+  const fail = m=>{ err.textContent=m; err.classList.remove('hide'); };
+  if(!email) return fail('請填 Email。');
+  const btn = $('#au-go'); btn.disabled=true;
+  try{
+    if(authMode==='reset'){
+      const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: appUrl() });
+      if(error) throw error;
+      ok.textContent = '重設信已寄出，請到信箱收信。'; ok.classList.remove('hide');
+    }else if(authMode==='in'){
+      const { error } = await sb.auth.signInWithPassword({ email, password: pw });
+      if(error) throw error;
+      const { data } = await sb.auth.getSession();
+      session = data.session; USERID = session.user.id;
+      gateLock();
+    }else{
+      if(pw.length < 8) throw new Error('登入密碼至少 8 個字。');
+      const { data, error } = await sb.auth.signUp({ email, password: pw });
+      if(error) throw error;
+      if(data.session){
+        session = data.session; USERID = session.user.id; gateLock();
+      }else{
+        ok.textContent = '註冊成功，請到信箱點確認信之後再回來登入。'; ok.classList.remove('hide');
+        setAuthMode('in');
+      }
+    }
+  }catch(e){ fail(e.message||String(e)); }
+  finally{ btn.disabled=false; }
+};
+$('#au-pw').addEventListener('keydown', e=>{ if(e.key==='Enter') $('#au-go').click(); });
+$('#lk-pw').addEventListener('keydown', e=>{ if(e.key==='Enter') $('#lk-go').click(); });
+$('#lk-pw2').addEventListener('keydown', e=>{ if(e.key==='Enter') $('#lk-go').click(); });
+$('#lk-remember').onclick = e=>{
+  const on = e.currentTarget.getAttribute('aria-pressed')!=='true';
+  e.currentTarget.setAttribute('aria-pressed', on?'true':'false');
+  e.currentTarget.classList.toggle('on', on);
+};
+$('#lk-signout').onclick = async ()=>{ if(sb) await sb.auth.signOut(); show('scr-auth'); };
+
+$('#nav').addEventListener('click', e=>{
+  const b = e.target.closest('[data-tab]'); if(!b) return;
+  ST.tab = b.dataset.tab; localStorage.setItem(LS.tab, ST.tab); renderList();
+});
+$('#list').addEventListener('click', e=>{
+  const b = e.target.closest('[data-id]'); if(!b) return;
+  openPatient(b.dataset.id);
+});
+$('#q').addEventListener('input', e=>{ ST.q = e.target.value; renderList(); });
+$('#q-clear').onclick = ()=>{ ST.q=''; $('#q').value=''; renderList(); };
+$('#d1').addEventListener('change', e=>{ ST.d1 = e.target.value; renderList(); });
+$('#d2').addEventListener('change', e=>{ ST.d2 = e.target.value; renderList(); });
+$('#f-clear').onclick = ()=>{
+  ST.q=''; ST.d1=''; ST.d2='';
+  $('#q').value=''; $('#d1').value=''; $('#d2').value='';
+  renderList();
+};
+$('#btn-menu').onclick = e=> mainMenu(e.currentTarget);
+$('#fab').onclick = ()=>{
+  const p = normalize(blankPatient());
+  p.status = ST.tab==='ward' ? 'ward' : 'er';
+  if(p.status==='ward') p.adm_date = todayStr();
+  openEditor('base', p, ()=> openPatient(p.id));
+};
+
+/* ---------------- service worker ---------------- */
+if('serviceWorker' in navigator && location.protocol==='https:'){
+  window.addEventListener('load', ()=> navigator.serviceWorker.register('sw.js').catch(()=>{}));
+}
+
+setAuthMode('in');
+boot();
+</script>
+</body>
+</html>

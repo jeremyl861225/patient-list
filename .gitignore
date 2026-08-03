@@ -1,0 +1,10 @@
+.DS_Store
+*.log
+
+# 任何含真實病人資料的東西都不進版控（這個 repo 是公開的）
+imports/
+exports/
+raw/
+*.import.json
+*.export.json
+patient-list-*.json
