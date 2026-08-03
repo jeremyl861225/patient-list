@@ -103,6 +103,8 @@ main{padding:14px 0 96px}
   font-size:13.5px;color:var(--ink2);box-shadow:var(--sh-1);display:inline-flex;align-items:center;gap:6px}
 .tbtn:hover{background:var(--card2)}
 .tbtn svg{width:15px;height:15px}
+.tbtn[aria-pressed="true"]{background:var(--danger);border-color:var(--danger);color:#fff}
+.tbtn[aria-pressed="true"]:hover{background:#963F35}
 
 /* ---------- 病人卡 ---------- */
 .cards{display:grid;gap:10px}
@@ -137,6 +139,25 @@ main{padding:14px 0 96px}
 .tag.info{background:var(--info-soft);color:var(--info)}
 .tag.off{background:#EDE9E1;color:#8A8172}
 .tag.warn{background:var(--danger-soft);color:var(--danger);font-weight:600}
+
+/* ---------- 待開刀：整張卡都要跳出來 ---------- */
+.opb{
+  display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:700;line-height:1;
+  padding:5px 10px 5px 8px;border-radius:999px;background:var(--danger);color:#fff;
+  letter-spacing:.04em;white-space:nowrap;box-shadow:0 1px 3px rgba(169,72,60,.35);
+}
+.opb svg{width:13px;height:13px;flex:none}
+.opb em{font-style:normal;font-weight:500;opacity:.92;margin-left:3px;
+  border-left:1px solid rgba(255,255,255,.45);padding-left:7px;max-width:180px;
+  overflow:hidden;text-overflow:ellipsis}
+.opb.big{font-size:12.5px;padding:6px 12px 6px 9px}
+.opb.big svg{width:15px;height:15px}
+.pt .r0{display:block;margin:0 0 6px}
+.pt.op{border-color:#E3BDB5;background:linear-gradient(180deg,#FDF3F0 0%,var(--card) 46%)}
+.pt.op .bar{background:var(--danger) !important}
+.pt.op:hover{border-color:#D9A99F}
+.pt.op.off{background:var(--card)}
+.pdh .opb{margin-top:2px}
 
 .empty{text-align:center;color:var(--muted);font-size:13.5px;padding:40px 20px;
   border:1px dashed var(--line);border-radius:var(--r-lg);background:var(--card2)}
@@ -488,6 +509,9 @@ table.gt td.na{color:#C6BCA9}
           <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>
           <input id="d1" type="date" aria-label="起始日"><span>–</span><input id="d2" type="date" aria-label="結束日">
         </div>
+        <button id="op-only" class="tbtn" aria-pressed="false">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 19.5l6.5-6.5M11 13l6.6-6.6a2.1 2.1 0 0 1 3 3L14 16z"/></svg>
+          待開刀</button>
         <button id="f-clear" class="tbtn hide">清除條件</button>
       </div>
       <div id="list"></div>
@@ -555,7 +579,8 @@ const ICO = {
   plus:'<path d="M12 5v14M5 12h14"/>',
   x:'<path d="M6 6l12 12M18 6L6 18"/>',
   back:'<path d="M15 6l-6 6 6 6"/>',
-  check:'<path d="M5 12.5l4.5 4.5L19 7.5"/>'
+  check:'<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+  knife:'<path d="M4.5 19.5l6.5-6.5M11 13l6.6-6.6a2.1 2.1 0 0 1 3 3L14 16z"/>'
 };
 
 /* ---------------- 加密 ---------------- */
@@ -655,15 +680,18 @@ const SIGNS = [
   {k:'rigidity',  en:'Abdominal rigidity',      zh:'腹壁僵硬'}
 ];
 const BOWEL = ['hypoactive','normoactive','hyperactive'];
+const VITAL_KEYS = ['T','P','R','BP','SpO2','O2','GCS','note'];
 const ROUTES = ['PO','IV','IF'];
 const FREQS  = ['QD','BID','TID','QID','Q6H','Q8H','Q12H','HS','QOD','PRN','STAT','ST'];
 const EXAM_TYPES = ['EKG','CXR','Echo','CT','EGD','CFS','MRI','PET','其他'];
+const EXAM_EXTRA = ['US','MRCP','ERCP','KUB','Angiography','Bone scan','Sono-guided','其他影像'];
 
 /* ---------------- 病人物件 ---------------- */
 function blankPatient(){
   return {
     v:1, id:uid(), mrn:'', name:'', sex:'', age:'', vs:'', bed:'',
-    status:'er', tracking:true, er_date:todayStr(), adm_date:'',
+    status:'er', tracking:true, pending_op:false, op_note:'',
+    er_date:todayStr(), adm_date:'', dc_date:'',
     history:[], pi:{ symptoms:{}, npo_since:'', signs:{}, text:'' },
     meds:[], vitals:[], labs:{items:[], cols:[], vals:{}}, exams:[],
     assessment:[], plan:[], note:'',
@@ -681,9 +709,23 @@ function normalize(p){
   if(!o.labs.vals || typeof o.labs.vals!=='object') o.labs.vals={};
   if(o.status!=='er' && o.status!=='ward') o.status='er';
   o.tracking = o.tracking !== false;
+  o.pending_op = o.pending_op === true;
+  o.op_note = o.op_note || '';
   return o;
 }
 const admitDateOf = p => p.status==='ward' ? (p.adm_date||p.er_date) : (p.er_date||p.adm_date);
+/* 住院／來診第幾天；已登記出院日就算到出院那天為止 */
+function dayNo(p){
+  const from = admitDateOf(p);
+  if(!from) return null;
+  if(p.dc_date){
+    const a=new Date(from+'T00:00:00'), b=new Date(p.dc_date+'T00:00:00');
+    if(isNaN(a)||isNaN(b)) return null;
+    return Math.round((b-a)/86400000) + 1;
+  }
+  const n = daysSince(from);
+  return n==null ? null : n+1;
+}
 const ageSexOf = p => [p.age!==''&&p.age!=null ? p.age+' y/o' : '', p.sex==='M'?'Male':p.sex==='F'?'Female':''].filter(Boolean).join(' ');
 
 /* ---------------- 敘述產生 ---------------- */
@@ -729,7 +771,7 @@ function signNarrative(pi){
 /* =========================================================================
  *  狀態與清單
  * ========================================================================= */
-const ST = { patients:[], tab: localStorage.getItem(LS.tab)||'er', q:'', d1:'', d2:'', openId:null, saving:0 };
+const ST = { patients:[], tab: localStorage.getItem(LS.tab)||'er', q:'', d1:'', d2:'', opOnly:false, openId:null, saving:0 };
 
 function counts(){
   const c={er:0, ward:0, off:0};
@@ -751,6 +793,7 @@ function filtered(){
   return ST.patients.filter(p=>{
     if(ST.tab==='off'){ if(p.tracking) return false; }
     else { if(!p.tracking || p.status!==ST.tab) return false; }
+    if(ST.opOnly && !p.pending_op) return false;
     if(q && !((p.mrn||'').toLowerCase().includes(q) || (p.name||'').toLowerCase().includes(q))) return false;
     if(ST.d1 || ST.d2){
       const d = admitDateOf(p);
@@ -760,24 +803,33 @@ function filtered(){
     }
     return true;
   }).sort((a,b)=>{
+    // 待開刀的一律排最前面，不然就照來診／住院日期由新到舊
+    if(!!a.pending_op !== !!b.pending_op) return a.pending_op ? -1 : 1;
     const da = admitDateOf(a)||'', db = admitDateOf(b)||'';
     if(da!==db) return db.localeCompare(da);
     return (a.name||'').localeCompare(b.name||'');
   });
 }
+function opBadge(p, big){
+  if(!p.pending_op) return '';
+  return `<span class="opb${big?' big':''}">${svgIcon(ICO.knife,1.9)}待開刀${
+    p.op_note?`<em>${h(p.op_note)}</em>`:''}</span>`;
+}
 function cardHTML(p){
-  const d = admitDateOf(p), n = daysSince(d);
-  const dayTag = d ? `<span class="tag ${p.status==='er'?'er':'d'}">${p.status==='er'?'來診':'住院'} ${fmtDate(d)}${n!=null?` · D${n+1}`:''}</span>` : '';
+  const d = admitDateOf(p), n = dayNo(p);
+  const dayTag = d ? `<span class="tag ${p.status==='er'?'er':'d'}">${p.status==='er'?'來診':'住院'} ${fmtDate(d)}${n!=null?` · D${n}`:''}</span>` : '';
+  const dc = p.dc_date ? `<span class="tag off">出院 ${fmtDate(p.dc_date)}</span>` : '';
   const npo = p.pi && p.pi.npo_since ? `<span class="tag warn">NPO ${fmtDate(p.pi.npo_since)}</span>` : '';
   const bed = p.bed ? `<span class="tag info">${h(p.bed)}</span>` : '';
   const off = !p.tracking ? `<span class="tag off">已結束追蹤</span>` : '';
   const ax  = (p.assessment||[]).filter(Boolean);
-  return `<button class="pt ${p.status==='er'?'er':''} ${p.tracking?'':'off'}" data-id="${p.id}">
+  return `<button class="pt ${p.status==='er'?'er':''} ${p.tracking?'':'off'} ${p.pending_op?'op':''}" data-id="${p.id}">
     <i class="bar"></i>
     <span class="bd">
+      ${p.pending_op?`<span class="r0">${opBadge(p)}</span>`:''}
       <span class="r1"><span class="nm">${h(p.name)||'（未填姓名）'}</span><span class="mrn">${h(p.mrn)||'—'}</span></span>
       <span class="r2">${h(ageSexOf(p))||'<span class="vs">未填年齡性別</span>'}${p.vs?` <span class="vs">· VS ${h(p.vs)}</span>`:''}</span>
-      <span class="r3">${dayTag}${bed}${npo}${off}</span>
+      <span class="r3">${dayTag}${dc}${bed}${npo}${off}</span>
       ${ax.length?`<span class="ax">${h(ax.slice(0,2).join('；'))}</span>`:''}
     </span>
   </button>`;
@@ -787,7 +839,7 @@ function renderList(){
   const rows = filtered();
   const box = $('#list');
   if(!rows.length){
-    const anyFilter = ST.q || ST.d1 || ST.d2;
+    const anyFilter = ST.q || ST.d1 || ST.d2 || ST.opOnly;
     const blank = ST.tab==='off'
       ? ['沒有已結束追蹤的病人', '在病人資料頁按「⋮ → 結束追蹤」，病人會移到這裡，資料保留。']
       : ['這裡還沒有病人', '按右下角「新增病人」開始，或從選單匯入資料。'];
@@ -796,7 +848,8 @@ function renderList(){
   } else {
     box.innerHTML = `<div class="cards">${rows.map(cardHTML).join('')}</div>`;
   }
-  $('#f-clear').classList.toggle('hide', !(ST.q||ST.d1||ST.d2));
+  $('#f-clear').classList.toggle('hide', !(ST.q||ST.d1||ST.d2||ST.opOnly));
+  $('#op-only').setAttribute('aria-pressed', ST.opOnly?'true':'false');
   $('#q-clear').classList.toggle('hide', !ST.q);
 }
 
@@ -1021,10 +1074,10 @@ function vitalsHTML(p){
   if(!p.vitals.length) return '';
   const rows = p.vitals.slice().sort((a,b)=>String(b.t||'').localeCompare(String(a.t||'')));
   return `<div class="tscroll"><table class="gt">
-    <thead><tr><th class="stick">時間</th><th>T (°C)</th><th>P</th><th>R</th><th>BP</th><th>SpO₂</th><th>O₂</th></tr></thead>
+    <thead><tr><th class="stick">時間</th><th>T (°C)</th><th>P</th><th>R</th><th>BP</th><th>SpO₂</th><th>O₂</th><th>GCS</th><th>備註</th></tr></thead>
     <tbody>${rows.map(v=>`<tr>
       <td class="stick">${h(v.t||'')}</td>
-      ${['T','P','R','BP','SpO2','O2'].map(k=>v[k]?`<td class="v">${h(v[k])}</td>`:'<td class="na">–</td>').join('')}
+      ${VITAL_KEYS.map(k=>v[k]?`<td class="v">${h(v[k])}</td>`:'<td class="na">–</td>').join('')}
     </tr>`).join('')}</tbody></table></div>`;
 }
 function labCell(val){
@@ -1053,10 +1106,11 @@ function examsHTML(p){
       ${e.findings?`<div class="ef">${h(e.findings)}</div>`:''}</div>`).join('');
 }
 function detailHTML(p){
-  const d = admitDateOf(p), n = daysSince(d);
+  const d = admitDateOf(p), n = dayNo(p);
   const tags = [];
   tags.push(`<span class="tag ${p.status==='er'?'er':'d'}">${p.status==='er'?'急診':'住院'}</span>`);
-  if(d) tags.push(`<span class="tag">${p.status==='er'?'來診':'住院'} ${d}${n!=null?` · D${n+1}`:''}</span>`);
+  if(d) tags.push(`<span class="tag">${p.status==='er'?'來診':'住院'} ${d}${n!=null?` · D${n}`:''}</span>`);
+  if(p.dc_date) tags.push(`<span class="tag off">出院 ${h(p.dc_date)}</span>`);
   if(p.status==='ward' && p.er_date && p.er_date!==p.adm_date) tags.push(`<span class="tag">來診 ${p.er_date}</span>`);
   if(p.bed) tags.push(`<span class="tag info">${h(p.bed)}</span>`);
   if(p.pi && p.pi.npo_since) tags.push(`<span class="tag warn">NPO since ${h(p.pi.npo_since)}</span>`);
@@ -1069,6 +1123,7 @@ function detailHTML(p){
       <button class="iconbtn" data-pmenu aria-label="更多">
         <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="12" cy="19" r="1.8"/></svg></button>
     </div>
+    ${p.pending_op?`<div style="margin-top:8px">${opBadge(p, true)}</div>`:''}
     <div class="l2">
       <span class="tag mono">${h(p.mrn)||'無病歷號'}</span>
       ${ageSexOf(p)?`<span class="tag">${h(ageSexOf(p))}</span>`:''}
@@ -1128,6 +1183,27 @@ function patientMenu(anchor, p, repaint, closeDetail){
   else items.push({t:'改回急診', ico:'<path d="M12 5v14M5 12h14"/>', act:async ()=>{
     p.status='er'; await savePatient(p); repaint();
   }});
+  items.push({t: p.dc_date?'修改出院日期':'登記出院日期', ico:'<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5M21 12H9"/>', act:async ()=>{
+    const d = await promptDate(p.dc_date?'修改出院日期':'登記出院日期', '出院日期', p.dc_date||todayStr());
+    if(d===null) return;
+    p.dc_date = d;
+    if(d && p.tracking && await confirmSheet('要一併結束追蹤嗎？',
+        '已登記出院日期。結束追蹤會把病人移到「已結束」分頁，<b>資料完整保留</b>，隨時可以恢復。','結束追蹤')){
+      p.tracking = false;
+    }
+    await savePatient(p); repaint();
+  }});
+  items.push({t: p.pending_op?'取消「待開刀」':'標記為待開刀', ico:ICO.knife, act:async ()=>{
+    if(!p.pending_op){
+      const note = await promptText('標記為待開刀', '擬行術式／時間（選填）', p.op_note||'',
+        '例：08/04 Lap. cholecystectomy');
+      if(note===null) return;
+      p.pending_op = true; p.op_note = note;
+    }else{
+      p.pending_op = false;
+    }
+    await savePatient(p); repaint();
+  }});
   items.push({t: p.tracking?'結束追蹤（保留資料）':'恢復追蹤', ico: p.tracking?'<path d="M12 3v9M6 8a8 8 0 1 0 12 0"/>':'<path d="M5 12.5l4.5 4.5L19 7.5"/>', act:async ()=>{
     p.tracking = !p.tracking; await savePatient(p); repaint();
   }});
@@ -1156,6 +1232,25 @@ function popMenu(anchor, items){
     b.onclick = ()=>{ m.remove(); document.removeEventListener('pointerdown', off, true); items[+b.dataset.i].act(); };
   });
 }
+function promptText(title, label, def, ph){
+  return new Promise(res=>{
+    let done=false;
+    openSheet({
+      title,
+      body:`<div class="field"><label class="lab">${label}</label>
+        <input id="ptx" class="inp" value="${h(def||'')}" placeholder="${h(ph||'')}"></div>`,
+      footer:`<span class="sp"></span><button class="btn" data-close>取消</button><button class="btn pri" data-ok>確定</button>`,
+      onMount(ov, close){
+        const f = ov.querySelector('#ptx');
+        setTimeout(()=>f.focus(), 60);
+        const ok = ()=>{ done=true; const v=f.value.trim(); close(); res(v); };
+        ov.querySelector('[data-ok]').onclick = ok;
+        f.addEventListener('keydown', e=>{ if(e.key==='Enter') ok(); });
+      },
+      onClose(){ if(!done) res(null); }
+    });
+  });
+}
 function promptDate(title, label, def){
   return new Promise(res=>{
     let done=false;
@@ -1173,12 +1268,14 @@ function summaryText(p){
   L.push(`${p.name||''} ${p.mrn?'('+p.mrn+')':''}`.trim());
   const l2=[ageSexOf(p), p.vs?'VS '+p.vs:'', p.bed||''].filter(Boolean).join(' · ');
   if(l2) L.push(l2);
-  const d=admitDateOf(p); if(d) L.push((p.status==='er'?'ER since ':'Admission since ')+d);
+  const d=admitDateOf(p);
+  if(d) L.push((p.status==='er'?'ER since ':'Admission since ')+d+(p.dc_date?'，discharged '+p.dc_date:''));
+  if(p.pending_op) L.push('** 待開刀 / Pending operation **' + (p.op_note?'：'+p.op_note:''));
   const add=(t,body)=>{ if(body && body.trim()){ L.push(''); L.push('# '+t); L.push(body.trim()); } };
   add('Medical history', (p.history||[]).map(x=>'- '+x).join('\n'));
   add('Present illness', [piNarrative(p.pi), p.pi.text, signNarrative(p.pi)].filter(Boolean).join('\n'));
   add('Medication', (p.meds||[]).map(m=>`- ${m.name} ${m.route||''} ${m.dose||''} ${m.freq||''}${m.route==='IF'&&m.rate?' @'+m.rate:''}${m.hold?' [hold '+m.hold+']':''}`.replace(/\s+/g,' ').trim()).join('\n'));
-  add('Vital signs', (p.vitals||[]).map(v=>`- ${v.t||''} T ${v.T||'-'} P ${v.P||'-'} R ${v.R||'-'} BP ${v.BP||'-'} SpO2 ${v.SpO2||'-'}${v.O2?' ('+v.O2+')':''}`).join('\n'));
+  add('Vital signs', (p.vitals||[]).map(v=>`- ${v.t||''} T ${v.T||'-'} P ${v.P||'-'} R ${v.R||'-'} BP ${v.BP||'-'} SpO2 ${v.SpO2||'-'}${v.O2?' ('+v.O2+')':''}${v.GCS?' GCS '+v.GCS:''}`).join('\n'));
   if(p.labs.items.length && p.labs.cols.length){
     const cols=p.labs.cols.slice().sort();
     add('Lab data', [['項目',...cols].join('\t')].concat(
@@ -1279,6 +1376,16 @@ const EDITORS = {
         <input class="inp" data-f="er_date" type="date" value="${h(p.er_date)}"></div>
       <div class="field"><label class="lab">住院日期 <span class="op">選填</span></label>
         <input class="inp" data-f="adm_date" type="date" value="${h(p.adm_date)}"></div></div>
+      <div class="field"><label class="lab">出院日期 <span class="op">選填</span></label>
+        <input class="inp" data-f="dc_date" type="date" value="${h(p.dc_date)}">
+        <p class="hintline">填了之後住院天數會算到出院當天為止，卡片顯示「出院 MM/DD」。</p></div>
+      <div class="field"><label class="lab">待開刀</label>
+        <div class="seg hot" data-seg="pending_op">
+          <button type="button" data-v="1" class="${p.pending_op?'on':''}">待開刀</button>
+          <button type="button" data-v="0" class="${p.pending_op?'':'on'}">否</button>
+        </div>
+        <input class="inp" data-f="op_note" value="${h(p.op_note)}" placeholder="擬行術式／時間（選填，例：08/04 Lap. cholecystectomy）" style="margin-top:8px">
+        <p class="hintline">標記後卡片會排到最前面並顯示紅色「待開刀」標籤。</p></div>
       <div class="field"><label class="lab">追蹤</label>
         <div class="seg" data-seg="tracking">
           <button type="button" data-v="1" class="${p.tracking?'on':''}">持續追蹤</button>
@@ -1293,11 +1400,12 @@ const EDITORS = {
       });
     },
     collect(root, p){
-      ['mrn','name','age','vs','bed','er_date','adm_date'].forEach(k=>{
+      ['mrn','name','age','vs','bed','er_date','adm_date','dc_date','op_note'].forEach(k=>{
         p[k] = root.querySelector(`[data-f="${k}"]`).value.trim();
       });
       const seg = n => { const b = root.querySelector(`[data-seg="${n}"] button.on`); return b?b.dataset.v:''; };
       p.sex = seg('sex'); p.status = seg('status')||'er'; p.tracking = seg('tracking')==='1';
+      p.pending_op = seg('pending_op')==='1';
       if(p.status==='ward' && !p.adm_date) p.adm_date = p.er_date || todayStr();
       if(!p.name && !p.mrn) return '至少要填病歷號或姓名';
     }
@@ -1465,16 +1573,22 @@ const EDITORS = {
   /* ---- 生命徵象 ---- */
   vitals:{
     title:'Vital signs 生命徵象', wide:true,
+    /* 注意：HTML 的屬性名不分大小寫，`data-T` 會被存成 `data-t` 而跟時間欄撞在一起。
+       所以這裡一律用 `data-k="<KEY>"`（屬性「值」才分大小寫）。 */
     _row(v){
       v = v||{t:nowStamp()};
+      const f = (k, ph, extra) =>
+        `<input class="inp" data-k="${k}" value="${h(v[k]||'')}" placeholder="${ph}" ${extra||''}>`;
       return rowShell('時間點', `
-        <div class="field"><input class="inp" data-t value="${h(v.t||'')}" placeholder="2026-08-03 08:00"></div>
-        <div class="row"><div class="field" style="margin:0 0 9px"><input class="inp" data-T value="${h(v.T||'')}" placeholder="T 36.8" inputmode="decimal"></div>
-          <div class="field" style="margin:0 0 9px"><input class="inp" data-P value="${h(v.P||'')}" placeholder="P 88" inputmode="numeric"></div>
-          <div class="field" style="margin:0 0 9px"><input class="inp" data-R value="${h(v.R||'')}" placeholder="R 18" inputmode="numeric"></div></div>
-        <div class="row"><div class="field" style="margin:0"><input class="inp" data-BP value="${h(v.BP||'')}" placeholder="BP 128/76"></div>
-          <div class="field" style="margin:0"><input class="inp" data-SpO2 value="${h(v.SpO2||'')}" placeholder="SpO₂ 97%"></div>
-          <div class="field" style="margin:0"><input class="inp" data-O2 value="${h(v.O2||'')}" placeholder="O₂ RA / NC 3L"></div></div>`);
+        <div class="field"><input class="inp" data-time value="${h(v.t||'')}" placeholder="2026-08-03 08:00"></div>
+        <div class="row"><div class="field" style="margin:0 0 9px">${f('T','T 36.8','inputmode="decimal"')}</div>
+          <div class="field" style="margin:0 0 9px">${f('P','P 88','inputmode="numeric"')}</div>
+          <div class="field" style="margin:0 0 9px">${f('R','R 18','inputmode="numeric"')}</div></div>
+        <div class="row"><div class="field" style="margin:0 0 9px">${f('BP','BP 128/76')}</div>
+          <div class="field" style="margin:0 0 9px">${f('SpO2','SpO₂ 97%')}</div>
+          <div class="field" style="margin:0 0 9px">${f('O2','O₂ RA / NC 3L')}</div></div>
+        <div class="row"><div class="field" style="margin:0">${f('GCS','GCS E4M6V5')}</div>
+          <div class="field" style="margin:0;flex:2">${f('note','備註（BW、尿量、疼痛分數…）')}</div></div>`);
     },
     body(p){ return `<div data-rows>${(p.vitals||[]).slice().sort((a,b)=>String(b.t||'').localeCompare(String(a.t||''))).map(v=>EDITORS.vitals._row(v)).join('')}</div>
       <button class="addrow" data-add>${svgIcon(ICO.plus,2.4)} 新增時間點</button>
@@ -1482,10 +1596,11 @@ const EDITORS = {
     mount(root){ rowsMount(root, ()=>EDITORS.vitals._row()); },
     collect(root, p){
       p.vitals = Array.from(root.querySelectorAll('[data-row]')).map(el=>{
-        const g = s=> el.querySelector(s).value.trim();
-        return { t:g('[data-t]'), T:g('[data-T]'), P:g('[data-P]'), R:g('[data-R]'),
-                 BP:g('[data-BP]'), SpO2:g('[data-SpO2]'), O2:g('[data-O2]') };
-      }).filter(v=> v.t || v.T || v.P || v.R || v.BP || v.SpO2);
+        const g = s=>{ const f = el.querySelector(s); return f ? f.value.trim() : ''; };
+        const o = { t:g('[data-time]') };
+        VITAL_KEYS.forEach(k=> o[k] = g(`[data-k="${k}"]`));
+        return o;
+      }).filter(v=> VITAL_KEYS.some(k=> v[k]) || v.t);
     }
   },
 
@@ -1568,13 +1683,15 @@ const EDITORS = {
       e = e||{type:'CT', date:todayStr()};
       return rowShell('檢查', `
         <div class="row"><div class="field" style="margin:0 0 9px">
-            <select class="inp" data-type>${EXAM_TYPES.map(t=>`<option ${e.type===t?'selected':''}>${t}</option>`).join('')}</select></div>
+            <input class="inp" data-type list="dl-exam" value="${h(e.type||'')}" placeholder="類型（可自行輸入）"></div>
           <div class="field" style="margin:0 0 9px"><input class="inp" data-date type="date" value="${h(e.date||'')}"></div></div>
         <div class="field"><input class="inp" data-title value="${h(e.title||'')}" placeholder="標題（CT abdomen with contrast）"></div>
         <div class="field" style="margin:0"><textarea class="inp" data-find placeholder="Findings / impression">${h(e.findings||'')}</textarea></div>`);
     },
-    body(p){ return `<div data-rows>${(p.exams||[]).map(e=>EDITORS.exams._row(e)).join('')}</div>
-      <button class="addrow" data-add>${svgIcon(ICO.plus,2.4)} 新增檢查</button>`; },
+    body(p){ return `<datalist id="dl-exam">${EXAM_TYPES.concat(EXAM_EXTRA).map(t=>`<option value="${t}">`).join('')}</datalist>
+      <div data-rows>${(p.exams||[]).map(e=>EDITORS.exams._row(e)).join('')}</div>
+      <button class="addrow" data-add>${svgIcon(ICO.plus,2.4)} 新增檢查</button>
+      <p class="hintline">類型可以直接打字，清單只是常用建議（US、MRCP、ERCP、Angiography… 都可以）。</p>`; },
     mount(root){ rowsMount(root, ()=>EDITORS.exams._row()); },
     collect(root, p){
       p.exams = Array.from(root.querySelectorAll('[data-row]')).map(el=>{
@@ -1638,9 +1755,10 @@ function pasteLabs(L, paint){
  *  匯入 / 匯出
  * ========================================================================= */
 function mergePatient(dst, src){
-  const simple = ['mrn','name','sex','age','vs','bed','status','er_date','adm_date','note'];
+  const simple = ['mrn','name','sex','age','vs','bed','status','er_date','adm_date','dc_date','note','op_note'];
   simple.forEach(k=>{ if(src[k]!=null && src[k]!=='') dst[k]=src[k]; });
   if(typeof src.tracking === 'boolean') dst.tracking = src.tracking;
+  if(typeof src.pending_op === 'boolean') dst.pending_op = src.pending_op;
   ['history','assessment','plan'].forEach(k=>{ if(Array.isArray(src[k]) && src[k].length) dst[k]=src[k]; });
   if(src.pi){
     dst.pi = dst.pi||{symptoms:{},signs:{},npo_since:'',text:''};
@@ -1772,6 +1890,7 @@ function aboutSheet(){
     <ul class="lines" style="font-size:13.5px">
       <li>結束追蹤只是移到「已結束」分頁，資料保留。</li>
       <li>Lab 表格過寬時可以左右滑動，第一欄會固定。</li>
+      <li>每個欄位都能自己增補：生命徵象每個時間點有備註欄，檢查類型可以自己打（US、MRCP…）。</li>
       <li>匯出的 JSON 是明文，含可識別資料，請小心保存。</li>
       <li>右上角的狀態會顯示「離線」或「N 筆待上傳」。</li>
       <li>登出會清掉這台裝置的金鑰與離線快取（雲端資料不受影響）。</li>
@@ -1782,7 +1901,7 @@ function aboutSheet(){
 /* =========================================================================
  *  帳號 / 解鎖流程
  * ========================================================================= */
-const APPVER = '1.1.0';
+const APPVER = '1.3.0';
 function show(id){
   ['scr-setup','scr-auth','scr-lock','app'].forEach(x=> $('#'+x).classList.toggle('hide', x!==id));
 }
@@ -2058,10 +2177,11 @@ $('#q-clear').onclick = ()=>{ ST.q=''; $('#q').value=''; renderList(); };
 $('#d1').addEventListener('change', e=>{ ST.d1 = e.target.value; renderList(); });
 $('#d2').addEventListener('change', e=>{ ST.d2 = e.target.value; renderList(); });
 $('#f-clear').onclick = ()=>{
-  ST.q=''; ST.d1=''; ST.d2='';
+  ST.q=''; ST.d1=''; ST.d2=''; ST.opOnly=false;
   $('#q').value=''; $('#d1').value=''; $('#d2').value='';
   renderList();
 };
+$('#op-only').onclick = ()=>{ ST.opOnly = !ST.opOnly; renderList(); };
 $('#btn-menu').onclick = e=> mainMenu(e.currentTarget);
 $('#fab').onclick = ()=>{
   const p = normalize(blankPatient());

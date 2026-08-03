@@ -26,7 +26,7 @@ rawtext_to_import.py — 把原始臨床文字轉成 Patient List 可匯入的 J
     Normal saline IF 80 mL/hr
 
     # Vitals
-    2026-08-03 08:00  T 38.2  P 104  R 20  BP 118/72  SpO2 97% RA
+    2026-08-03 08:00  T 38.2  P 104  R 20  BP 118/72  SpO2 97% RA  GCS E4M6V5
 
     # Lab  2026-08-03 06:00
     WBC 15.2 H
@@ -386,11 +386,18 @@ def parse_vitals(lines, default_date=""):
         if not s or not re.search(r"\d", s):
             continue
         t = stamp(s, default_date)
-        v = {"t": t, "T": "", "P": "", "R": "", "BP": "", "SpO2": "", "O2": ""}
+        v = {"t": t, "T": "", "P": "", "R": "", "BP": "", "SpO2": "", "O2": "", "GCS": "", "note": ""}
         body = s
         if t:
             body = DATE_RE.sub(" ", body)
             body = TIME_RE.sub(" ", body, count=1)
+        # GCS 先抽掉，免得 E4M6V5 裡的數字被其他樣式撿走
+        mg = re.search(r"\b((?:E\d|V\d|M\d\d?){2,3})\b", body)
+        if not mg:
+            mg = re.search(r"\bGCS\s*[:=]?\s*(\d{1,2})\b", body, re.I)
+        if mg:
+            v["GCS"] = mg.group(1)
+            body = body[:mg.start()] + " " + body[mg.end():]
         for key, pat in VITAL_PATS:
             m = re.search(pat, body, re.I)
             if m:
@@ -402,7 +409,7 @@ def parse_vitals(lines, default_date=""):
                        r"ventilator|BiPAP|CPAP|FiO2\s*\d+%?)", body, re.I)
         if mo:
             v["O2"] = mo.group(0).strip()
-        if any(v[k] for k in ("T", "P", "R", "BP", "SpO2")):
+        if any(v[k] for k in ("T", "P", "R", "BP", "SpO2", "GCS")):
             out.append(v)
     return out
 
@@ -539,6 +546,12 @@ def convert(text, meta):
         p["er_date"] = meta["er_date"]
     if meta.get("adm_date"):
         p["adm_date"] = meta["adm_date"]
+    if meta.get("dc_date"):
+        p["dc_date"] = meta["dc_date"]
+    if meta.get("pending_op"):
+        p["pending_op"] = True
+    if meta.get("op_note"):
+        p["op_note"] = meta["op_note"]
 
     notes = []
     default_stamp = meta.get("time", "")
@@ -605,8 +618,13 @@ def validate(doc):
             if m.get("route") and m["route"] not in ROUTES:
                 errs.append("%s：藥物「%s」的 route=%s 不在 %s" % (tag, m.get("name"), m["route"], ROUTES))
         for e in p.get("exams", []):
-            if e.get("type") and e["type"] not in EXAM_TYPES + ["其他"]:
-                errs.append("%s：檢查 type=%s 不在 %s" % (tag, e["type"], EXAM_TYPES))
+            if e.get("type") is not None and not isinstance(e["type"], str):
+                errs.append("%s：檢查 type 必須是字串" % tag)
+        for k in ("op_note", "dc_date"):
+            if k in p and not isinstance(p[k], str):
+                errs.append("%s：%s 必須是字串" % (tag, k))
+        if "pending_op" in p and not isinstance(p["pending_op"], bool):
+            errs.append("%s：pending_op 必須是 true／false" % tag)
         pi = p.get("pi") or {}
         for k in (pi.get("symptoms") or {}):
             if k not in SYMPTOM_KEYS:
@@ -646,7 +664,9 @@ def main():
     ap.add_argument("--age"), ap.add_argument("--vs"), ap.add_argument("--bed"), ap.add_argument("--id")
     ap.add_argument("--status", choices=["er", "ward"], default="er")
     ap.add_argument("--date", help="來診／住院日期 YYYY-MM-DD（依 --status 放入對應欄位）")
-    ap.add_argument("--er-date"), ap.add_argument("--adm-date")
+    ap.add_argument("--er-date"), ap.add_argument("--adm-date"), ap.add_argument("--dc-date")
+    ap.add_argument("--pending-op", action="store_true", help="標記為待開刀")
+    ap.add_argument("--op-note", help="擬行術式／時間，例 '08/04 Lap. cholecystectomy'")
     ap.add_argument("--time", help="檢驗預設時間欄，例 '2026-08-03 06:00'")
     ap.add_argument("--merge", metavar="FILE", help="併入既有的匯入檔（同 mrn 覆蓋）")
     args = ap.parse_args()
@@ -671,7 +691,8 @@ def main():
     meta = {"mrn": args.mrn, "name": args.name, "sex": args.sex, "age": args.age,
             "vs": args.vs, "bed": args.bed, "id": args.id, "status": args.status,
             "date": args.date, "er_date": args.er_date, "adm_date": args.adm_date,
-            "time": args.time}
+            "dc_date": args.dc_date, "op_note": args.op_note,
+            "pending_op": True if args.pending_op else None, "time": args.time}
     meta = {k: v for k, v in meta.items() if v}
     patient = convert(text, meta)
 

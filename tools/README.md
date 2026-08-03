@@ -16,7 +16,8 @@ python3 rawtext_to_import.py raw.txt \
 | `--mrn` `--name` `--sex` `--age` `--vs` `--bed` | 卡片上的基本資料 |
 | `--status er\|ward` | 預設 `er` |
 | `--date` | 依 `--status` 放進 `er_date` 或 `adm_date` |
-| `--er-date` `--adm-date` | 兩個日期都要給時用 |
+| `--er-date` `--adm-date` `--dc-date` | 來診／住院／出院日期，需要各自指定時用 |
+| `--pending-op` `--op-note` | 標記待開刀，附擬行術式／時間 |
 | `--time` | 檢驗區段沒寫時間時的預設時間欄 |
 | `--id` | 指定既有病人的 id（最精準的更新方式） |
 | `--merge FILE` | 併進既有的匯入檔（同 `mrn` 覆蓋） |
@@ -47,7 +48,7 @@ Levofloxacin 500 mg PO QD hold 2026-08-02
 Normal saline IF 80 mL/hr
 
 # Vitals
-2026-08-03 08:00  T 38.2  P 104  R 20  BP 118/72  SpO2 97% RA
+2026-08-03 08:00  T 38.2  P 104  R 20  BP 118/72  SpO2 97% RA  GCS E4M6V5
 
 # Lab  2026-08-03 06:00
 WBC 15.2 H
@@ -101,6 +102,9 @@ Cr (mg/dL)	1.8 H	1.4
 - **理學檢查**：`(+)`／`positive`／`陽性` 為陽性；`(-)`／`negative`／`no`／`陰性` 為陰性；
   兩者都沒有時**預設為陽性**（因為病歷通常只寫有意義的陽性所見）——這點最容易誤判，
   轉完務必檢查。
+- **檢查類型**不再限制在清單內，`US`／`MRCP`／`ERCP` 這類都可以直接寫。
+- **GCS**：`E4M6V5` 這種連寫，或 `GCS 14` 都認得；會先抽出來再解析其他數值，
+  免得 `E4M6V5` 裡的數字被 T／P／R 的樣式撿走。
 - **看不懂的行**不會被丟掉，會原封不動收進 `note`，並在 stderr 印出提醒。
 
 ## 驗證
