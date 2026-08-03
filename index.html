@@ -158,6 +158,9 @@ main{padding:14px 0 96px}
 .pt.op:hover{border-color:#D9A99F}
 .pt.op.off{background:var(--card)}
 .pdh .opb{margin-top:2px}
+.othr{display:inline-block;margin-top:8px;font-size:12.5px;color:var(--accent-ink);font-weight:600;
+  text-decoration:underline;text-underline-offset:3px;text-decoration-color:#B9CDBE}
+.othr:hover{text-decoration-color:var(--accent)}
 
 .empty{text-align:center;color:var(--muted);font-size:13.5px;padding:40px 20px;
   border:1px dashed var(--line);border-radius:var(--r-lg);background:var(--card2)}
@@ -270,7 +273,7 @@ ul.lines.num{counter-reset:n}
 ul.lines.num li{counter-increment:n;padding-left:22px}
 ul.lines.num li::before{content:counter(n)".";position:absolute;left:0;top:0;width:auto;height:auto;
   background:none;border-radius:0;font-size:12.5px;font-weight:700;color:var(--accent);line-height:1.7}
-.narr{font-size:14px;line-height:1.62;word-break:break-word}
+.narr{font-size:14px;line-height:1.62;word-break:break-word;white-space:pre-wrap}
 .narr .np{color:var(--muted)}
 
 /* 用藥列 */
@@ -721,12 +724,20 @@ function dayNo(p){
   if(p.dc_date){
     const a=new Date(from+'T00:00:00'), b=new Date(p.dc_date+'T00:00:00');
     if(isNaN(a)||isNaN(b)) return null;
-    return Math.round((b-a)/86400000) + 1;
+    const d = Math.round((b-a)/86400000) + 1;
+    return d < 1 ? null : d;
   }
   const n = daysSince(from);
-  return n==null ? null : n+1;
+  // 日期還沒到（預定住院之類）就不顯示第幾天，不然會出現 D-42
+  return (n==null || n < 0) ? null : n+1;
 }
-const ageSexOf = p => [p.age!==''&&p.age!=null ? p.age+' y/o' : '', p.sex==='M'?'Male':p.sex==='F'?'Female':''].filter(Boolean).join(' ');
+/* 純數字視為歲數，自己帶單位的（8m、3 months、20 days）原樣顯示——未滿一歲的病人用得到 */
+function ageText(a){
+  const t = String(a==null ? '' : a).trim();
+  if(!t) return '';
+  return /^\d+(\.\d+)?$/.test(t) ? t+' y/o' : t;
+}
+const ageSexOf = p => [ageText(p.age), p.sex==='M'?'Male':p.sex==='F'?'Female':''].filter(Boolean).join(' ');
 
 /* ---------------- 敘述產生 ---------------- */
 function piNarrative(pi){
@@ -748,7 +759,8 @@ function piNarrative(pi){
   }
   const extra = [];
   if(pi.npo_since) extra.push('NPO since '+pi.npo_since+'.');
-  return [s1, extra.join(' ')].filter(Boolean).join(' ');
+  // 換行而不是接在同一段後面——PI 一句一行比較好讀
+  return [s1, extra.join(' ')].filter(Boolean).join('\n');
 }
 function signNarrative(pi){
   const out = [];
@@ -1052,7 +1064,7 @@ function piHTML(p){
   const narr = piNarrative(pi), sg = signNarrative(pi);
   const bits = [];
   if(narr) bits.push(`<p class="narr" style="margin:0 0 8px">${h(narr)}</p>`);
-  if(pi.text) bits.push(`<p class="narr" style="margin:0 0 8px;white-space:pre-wrap">${h(pi.text)}</p>`);
+  if(pi.text) bits.push(`<p class="narr" style="margin:0 0 8px">${h(pi.text)}</p>`);
   if(sg) bits.push(`<p class="narr np" style="margin:0"><b style="color:var(--ink2)">Signs:</b> ${h(sg)}</p>`);
   return bits.join('');
 }
@@ -1105,6 +1117,37 @@ function examsHTML(p){
       ${e.title?`<span class="eti">${h(e.title)}</span>`:''}</div>
       ${e.findings?`<div class="ef">${h(e.findings)}</div>`:''}</div>`).join('');
 }
+/* 同一個病歷號底下有幾次來診／住院（一次＝一張卡） */
+const encountersOf = p => !p.mrn ? [p]
+  : ST.patients.filter(x=> x.mrn === p.mrn)
+      .sort((a,b)=> (admitDateOf(b)||'').localeCompare(admitDateOf(a)||''));
+const encounterCount = p => encountersOf(p).length;
+
+function encountersSheet(p, jump){
+  const rows = encountersOf(p);
+  openSheet({
+    title:'這位病人的來診／住院紀錄', sub:`${p.name||''} ${p.mrn||''}`.trim(),
+    body:`<div class="cards" style="gap:8px">${rows.map(x=>{
+      const d = admitDateOf(x), n = dayNo(x);
+      return `<button class="pt ${x.status==='er'?'er':''} ${x.tracking?'':'off'} ${x.pending_op?'op':''}" data-go="${x.id}">
+        <i class="bar"></i><span class="bd">
+          ${x.pending_op?`<span class="r0">${opBadge(x)}</span>`:''}
+          <span class="r1"><span class="nm" style="font-size:14.5px">${x.status==='er'?'急診':'住院'} ${h(d||'—')}</span>
+            ${x.id===p.id?'<span class="tag d">目前這張</span>':''}</span>
+          <span class="r3">${n!=null?`<span class="tag">D${n}</span>`:''}
+            ${x.dc_date?`<span class="tag off">出院 ${fmtDate(x.dc_date)}</span>`:''}
+            ${x.tracking?'':'<span class="tag off">已結束追蹤</span>'}</span>
+          ${(x.assessment||[]).length?`<span class="ax">${h(x.assessment[0])}</span>`:''}
+        </span></button>`;
+    }).join('')}</div>`,
+    onMount(ov, close){
+      ov.querySelectorAll('[data-go]').forEach(b=> b.onclick = ()=>{
+        const id = b.dataset.go; close();
+        if(id !== p.id) jump(id);
+      });
+    }
+  });
+}
 function detailHTML(p){
   const d = admitDateOf(p), n = dayNo(p);
   const tags = [];
@@ -1124,6 +1167,7 @@ function detailHTML(p){
         <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="12" cy="19" r="1.8"/></svg></button>
     </div>
     ${p.pending_op?`<div style="margin-top:8px">${opBadge(p, true)}</div>`:''}
+    ${encounterCount(p)>1?`<button class="othr" data-others>同一病歷號共 ${encounterCount(p)} 次來診／住院 →</button>`:''}
     <div class="l2">
       <span class="tag mono">${h(p.mrn)||'無病歷號'}</span>
       ${ageSexOf(p)?`<span class="tag">${h(ageSexOf(p))}</span>`:''}
@@ -1140,7 +1184,7 @@ function detailHTML(p){
     ${sec('Image / Exam','影像檢查','exams', examsHTML(p))}
     ${sec('Assessment','評估','assessment', linesHTML(p.assessment, true))}
     ${sec('Plan','計畫','plan', linesHTML(p.plan, true))}
-    ${p.note?sec('Note','備註','note', `<p class="narr" style="margin:0;white-space:pre-wrap">${h(p.note)}</p>`):sec('Note','備註','note','')}
+    ${p.note?sec('Note','備註','note', `<p class="narr" style="margin:0">${h(p.note)}</p>`):sec('Note','備註','note','')}
   </div>`;
 }
 function openPatient(id){
@@ -1166,6 +1210,8 @@ function openPatient(id){
         });
         const pm = sheet.querySelector('[data-pmenu]');
         if(pm) pm.onclick = e=> patientMenu(e.currentTarget, cur, paint, close);
+        const ob = sheet.querySelector('[data-others]');
+        if(ob) ob.onclick = ()=> encountersSheet(cur, other=>{ close(); openPatient(other); });
       }
     },
     onClose(){ ST.openId = null; renderList(); }
@@ -1206,6 +1252,14 @@ function patientMenu(anchor, p, repaint, closeDetail){
   }});
   items.push({t: p.tracking?'結束追蹤（保留資料）':'恢復追蹤', ico: p.tracking?'<path d="M12 3v9M6 8a8 8 0 1 0 12 0"/>':'<path d="M5 12.5l4.5 4.5L19 7.5"/>', act:async ()=>{
     p.tracking = !p.tracking; await savePatient(p); repaint();
+  }});
+  items.push({t:'新增這位病人的下一次來診／住院', ico:'<path d="M9 9h10v12H9zM5 15V3h10v2"/><path d="M14 13v4M12 15h4"/>', act:()=>{
+    const np = normalize(blankPatient());
+    ['mrn','name','sex','age','vs'].forEach(k=> np[k] = p[k]);
+    np.history = (p.history||[]).slice();          // 病史跟著人走，其餘留空
+    np.status = 'er'; np.er_date = todayStr(); np.adm_date = '';
+    if(closeDetail) closeDetail();
+    openEditor('base', np, ()=> openPatient(np.id));
   }});
   items.push({t:'複製為文字病摘', ico:'<path d="M9 9h10v12H9zM5 15V3h10v2"/>', act:()=> copySummary(p)});
   items.push({sep:true});
@@ -1357,7 +1411,7 @@ const EDITORS = {
         <input class="inp mono" data-f="mrn" value="${h(p.mrn)}" inputmode="numeric" autocapitalize="off" spellcheck="false"></div>
       <div class="field"><label class="lab">姓名</label><input class="inp" data-f="name" value="${h(p.name)}"></div></div>
       <div class="row"><div class="field"><label class="lab">年齡</label>
-        <input class="inp" data-f="age" value="${h(p.age)}" inputmode="numeric"></div>
+        <input class="inp" data-f="age" value="${h(p.age)}" placeholder="64／8m／20 days"></div>
       <div class="field"><label class="lab">性別</label>
         <div class="seg" data-seg="sex">
           <button type="button" data-v="M" class="${p.sex==='M'?'on':''}">Male</button>
@@ -1467,7 +1521,8 @@ const EDITORS = {
           </select></span></div></div>
       </div>
       <div class="field"><label class="lab">補充敘述 <span class="op">選填，會接在自動產生的句子後面</span></label>
-        <textarea class="inp" data-text placeholder="其他病程描述、外院處置、相關陰性表現…">${h(pi.text||'')}</textarea></div>
+        <textarea class="inp" data-text style="min-height:120px" placeholder="其他病程描述、外院處置、相關陰性表現…">${h(pi.text||'')}</textarea>
+        <p class="hintline">換行會原樣保留，一句一行也沒問題。</p></div>
       <div class="field"><label class="lab">預覽</label>
         <div class="err ok" id="pi-prev" style="margin:0"></div></div>`;
     },
@@ -1798,12 +1853,31 @@ function parseImport(text){
   if(!Array.isArray(arr)) throw new Error('找不到 patients 陣列');
   return arr;
 }
+/* 一張卡＝一次來診／住院，所以同一個病歷號可以有很多張。
+ * 比對順序：id → 病歷號＋日期對得上的那一次 → （沒給日期時）最近一次。
+ * 病歷號一樣但日期對不上，代表是另一次來診，開新卡而不是蓋掉舊的。 */
+function matchEncounter(raw){
+  if(raw.id){
+    const byId = ST.patients.find(p=>p.id===raw.id);
+    if(byId) return byId;
+  }
+  if(!raw.mrn) return null;
+  const cands = ST.patients.filter(p=>p.mrn && p.mrn===raw.mrn);
+  if(!cands.length) return null;
+  const dates = [raw.er_date, raw.adm_date].filter(Boolean);
+  if(dates.length){
+    return cands.find(p=>
+      (p.er_date && dates.includes(p.er_date)) || (p.adm_date && dates.includes(p.adm_date))) || null;
+  }
+  return cands.slice().sort((a,b)=>{
+    if(a.tracking !== b.tracking) return a.tracking ? -1 : 1;
+    return (admitDateOf(b)||'').localeCompare(admitDateOf(a)||'');
+  })[0];
+}
 async function doImport(arr){
   let add=0, upd=0;
   for(const raw of arr){
-    let dst = null;
-    if(raw.id) dst = ST.patients.find(p=>p.id===raw.id);
-    if(!dst && raw.mrn) dst = ST.patients.find(p=>p.mrn && p.mrn===raw.mrn);
+    const dst = matchEncounter(raw);
     if(dst){ mergePatient(dst, raw); upd++; await savePatient(dst, true); }
     else{
       const p = normalize(Object.assign(blankPatient(), {id: raw.id||uid()}));
@@ -1901,7 +1975,7 @@ function aboutSheet(){
 /* =========================================================================
  *  帳號 / 解鎖流程
  * ========================================================================= */
-const APPVER = '1.3.0';
+const APPVER = '1.4.0';
 function show(id){
   ['scr-setup','scr-auth','scr-lock','app'].forEach(x=> $('#'+x).classList.toggle('hide', x!==id));
 }
