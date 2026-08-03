@@ -806,10 +806,12 @@ const LAB_REF = [
   {a:['na','sodium'],                       u:['mmol/l','meq/l'], lo:135, hi:145, src:'std'},
   {a:['k','potassium'],                     u:['mmol/l','meq/l'], lo:3.5, hi:5.1, src:'std'},
   {a:['cl','chloride'],                     u:['mmol/l','meq/l'], lo:98, hi:107, src:'std'},
-  {a:['ca','calcium'],                      u:['mg/dl'], lo:8.6, hi:10.3, src:'std'},
+  {a:['ca','calcium'],                      u:['mg/dl'], lo:8.6, hi:10.3, src:'std',
+    alt:[{u:['mmol/l'], lo:2.15, hi:2.55, src:'ntuh'}]},
   {a:['ica','ionizedcalcium'], n:'iCa',     u:['mmol/l'], lo:1.15, hi:1.35, src:'std'},
-  {a:['p','phosphate','phosphorus'],        u:['mg/dl'], lo:2.5, hi:4.5, src:'std'},
-  {a:['mg','magnesium'],                    u:['mg/dl'], lo:1.8, hi:2.4, src:'std'},
+  {a:['p','phosphate','phosphorus'],        u:['mg/dl'], lo:2.5, hi:5.0, src:'ntuh'},
+  {a:['mg','magnesium'],                    u:['mg/dl'], lo:1.8, hi:2.4, src:'std',
+    alt:[{u:['mmol/l'], lo:0.65, hi:1.05, src:'std'}]},
   {a:['ast','got','astgot'],                u:['u/l'], lo:0, hi:40, src:'std'},
   {a:['alt','gpt','altgpt'],                u:['u/l'], lo:0, hi:40, src:'std'},
   {a:['alp','alkalinephosphatase'],         u:['u/l'], lo:40, hi:130, src:'std'},
@@ -863,21 +865,32 @@ const UNIT_TEXT = {'k/ul':'K/µL','m/ul':'M/µL','g/dl':'g/dL','fl':'fL','u/l':'
   'mg/dl':'mg/dL','mg/lfeu':'mg/L FEU','mmol/l':'mmol/L','umol/l':'µmol/L',
   'ng/ml':'ng/mL','ng/dl':'ng/dL','uiu/ml':'µIU/mL','mmhg':'mmHg'};
 const prettyUnit = u => UNIT_TEXT[u] || u;
+/* 同一個項目換單位就是完全不同的一組數字（Ca 用 mg/dL 是 8.6–10.3、
+ * 用 mmol/L 是 2.15–2.55），所以 alt 各自帶自己的區間，不做換算。 */
+function labVariant(d, u){
+  if(!u || d.u.includes(u)) return d;
+  const v = (d.alt||[]).find(x=>x.u.includes(u));
+  return v ? {a:d.a, n:d.n, u:v.u, lo:v.lo, hi:v.hi, M:v.M, F:v.F, src:v.src||d.src} : null;
+}
 function labRefOf(item, sex){
   if(!labAuto()) return null;
-  const d = LAB_INDEX.get(normLabName(item && item.name));
-  if(!d) return null;
-  const u = normUnit(item.unit);
-  if(u && !d.u.includes(u)) return null;      // 單位對不上就不判讀
+  const d0 = LAB_INDEX.get(normLabName(item && item.name));
+  if(!d0) return null;
+  const d = labVariant(d0, normUnit(item.unit));
+  if(!d) return null;                         // 單位對不上就不判讀
   const [lo, hi] = refRange(d, sex);
   if(lo==null && hi==null) return null;
   return {lo, hi, unit:(item.unit||'').trim() || prettyUnit(d.u[0]), src:d.src};
 }
+/* 兩端小數位數對齊，免得 2.5–5.0 印成 2.5–5 */
+function rangeText(lo, hi){
+  const dp = x => (String(x).split('.')[1]||'').length;
+  const n = (x, o) => { const d = Math.max(dp(x), dp(o)); return d ? Number(x).toFixed(d) : String(x); };
+  if(lo!=null && hi!=null) return `${n(lo,hi)}–${n(hi,lo)}`;
+  return hi!=null ? `≤ ${hi}` : `≥ ${lo}`;
+}
 function refText(r){
-  const n = x => String(x);
-  const range = r.lo!=null && r.hi!=null ? `${n(r.lo)}–${n(r.hi)}`
-              : r.hi!=null ? `≤ ${n(r.hi)}` : `≥ ${n(r.lo)}`;
-  return `參考值 ${range}${r.unit?' '+r.unit:''}（${r.src==='ntuh'?'台大檢驗醫學部':'通用成人值'}）`;
+  return `參考值 ${rangeText(r.lo, r.hi)}${r.unit?' '+r.unit:''}（${r.src==='ntuh'?'台大檢驗醫學部':'通用成人值'}）`;
 }
 /* 把一格檢驗值拆成 {值, H/L, 是不是自動判讀的} */
 function labParts(val, ref){
@@ -2251,8 +2264,7 @@ const labRefName = d => d.n || (d.a[0].length<=5
   ? d.a[0].toUpperCase() : d.a[0][0].toUpperCase()+d.a[0].slice(1));
 function refSheet(){
   const fmt = d=>{
-    const one = r => r[0]!=null && r[1]!=null ? `${r[0]}–${r[1]}`
-                   : r[1]!=null ? `≤ ${r[1]}` : `≥ ${r[0]}`;
+    const one = r => rangeText(r[0], r[1]);
     if(d.M || d.F) return [d.M?'♂ '+one(d.M):'', d.F?'♀ '+one(d.F):''].filter(Boolean).join('　');
     return one([d.lo==null?null:d.lo, d.hi==null?null:d.hi]);
   };
@@ -2264,12 +2276,13 @@ function refSheet(){
     標<span class="mono" style="color:var(--danger)">台大</span>的是台大檢驗醫學部公布的區間；
     標<span class="mono">通用</span>的還沒逐項核對台大公告值，<b>請照院內報告單校正</b>。</p>
     <table class="gt">
-      <tbody>${LAB_REF.map(d=>`<tr>
+      <tbody>${LAB_REF.flatMap(d=>[d, ...(d.alt||[]).map(v=>
+        ({a:d.a, n:labRefName(d), u:v.u, lo:v.lo, hi:v.hi, M:v.M, F:v.F, src:v.src||d.src}))]).map(d=>`<tr>
         <td class="stick">${h(labRefName(d))}</td>
         <td class="v">${h(fmt(d))}${d.u[0]?`<span class="u">${h(prettyUnit(d.u[0]))}</span>`:''}</td>
         <td class="v" style="width:1%;white-space:nowrap;${d.src==='ntuh'?'color:var(--danger)':'color:var(--muted)'}">${d.src==='ntuh'?'台大':'通用'}</td>
       </tr>`).join('')}</tbody></table>
-    <p class="hintline">共 ${LAB_REF.length} 項；辨識名稱時大小寫、空白與 <span class="mono">-</span>／<span class="mono">_</span> 都會忽略（<span class="mono">T-BIL</span>＝<span class="mono">tbil</span>）。</p>`});
+    <p class="hintline">共 ${LAB_REF.length} 項（同一項目有兩種單位的分列）；辨識名稱時大小寫、空白與 <span class="mono">-</span>／<span class="mono">_</span> 都會忽略（<span class="mono">T-BIL</span>＝<span class="mono">tbil</span>）。</p>`});
 }
 function aboutSheet(){
   openSheet({title:'關於 Patient List', body:`
@@ -2297,7 +2310,7 @@ function aboutSheet(){
 /* =========================================================================
  *  帳號 / 解鎖流程
  * ========================================================================= */
-const APPVER = '1.8.2';
+const APPVER = '1.8.3';
 function show(id){
   ['scr-setup','scr-auth','scr-lock','app'].forEach(x=> $('#'+x).classList.toggle('hide', x!==id));
 }
