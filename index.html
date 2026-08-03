@@ -227,6 +227,24 @@ select.inp{-webkit-appearance:none;appearance:none;
   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23978E7E' stroke-width='2.4' stroke-linecap='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
   background-repeat:no-repeat;background-position:right 9px center;background-size:15px;padding-right:30px}
 .inp:focus{border-color:var(--accent);background:var(--card)}
+/* iOS Safari 的日期輸入框有自己的最小寬度（「2026年8月3日」那串），
+   放進兩欄的 .row 裡會把版面撐出頁面右側。三件事一起做才壓得住：
+   關掉原生外觀、允許縮到 0、以及把內部值的 pseudo-element 也拉成 100%。 */
+input[type="date"],input[type="time"],input[type="datetime-local"]{
+  -webkit-appearance:none;appearance:none;min-width:0;max-width:100%;
+}
+input[type="date"]::-webkit-date-and-time-value{
+  text-align:left;min-width:0;width:100%;margin:0;
+}
+input[type="date"]::-webkit-calendar-picker-indicator{margin-left:auto}
+.inp{max-width:100%}
+.row{min-width:0}
+@media(max-width:430px){
+  .row.stackable{display:block}
+  .row.stackable>*{width:100%}
+}
+/* 保險：任何編輯器都不該把彈出層撐寬（表格自己有 .tscroll 可以橫捲） */
+.sh-b{overflow-x:hidden}
 .inp::placeholder{color:#B9B0A0}
 .row{display:flex;gap:9px}
 .row>*{flex:1;min-width:0}
@@ -1429,7 +1447,7 @@ const EDITORS = {
           <button type="button" data-v="er" class="${p.status==='er'?'on':''}">急診</button>
           <button type="button" data-v="ward" class="${p.status==='ward'?'on':''}">住院</button>
         </div></div>
-      <div class="row"><div class="field"><label class="lab">來診日期</label>
+      <div class="row stackable"><div class="field"><label class="lab">來診日期</label>
         <input class="inp" data-f="er_date" type="date" value="${h(p.er_date)}"></div>
       <div class="field"><label class="lab">住院日期 <span class="op">選填</span></label>
         <input class="inp" data-f="adm_date" type="date" value="${h(p.adm_date)}"></div></div>
@@ -2018,7 +2036,7 @@ function aboutSheet(){
 /* =========================================================================
  *  帳號 / 解鎖流程
  * ========================================================================= */
-const APPVER = '1.5.0';
+const APPVER = '1.5.1';
 function show(id){
   ['scr-setup','scr-auth','scr-lock','app'].forEach(x=> $('#'+x).classList.toggle('hide', x!==id));
 }
