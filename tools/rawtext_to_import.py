@@ -202,7 +202,20 @@ def header_key(line):
 
 # ---------------------------------------------------------------- 各段解析
 def parse_history(lines):
-    return [re.sub(r"^[-*·•\d.)\s]+", "", l).strip() for l in lines if l.strip()]
+    """病史有兩層：`#.` 是主項，`-` 開頭是上一項的子項（App 會縮排顯示）。
+    所以 `-` 這個標記要保留下來，只把 `#.`、`*`、編號這些去掉。"""
+    out = []
+    for l in lines:
+        t = l.strip()
+        if not t:
+            continue
+        sub = bool(re.match(r"^[-–—•]\s+", t))
+        body = re.sub(r"^[-–—•*]\s*", "", t)
+        body = re.sub(r"^#+\.?\s*", "", body)
+        body = re.sub(r"^\d+[.)]\s*", "", body).strip()
+        if body:
+            out.append(("- " + body) if sub else body)
+    return out
 
 
 def parse_lines(lines):

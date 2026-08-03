@@ -295,6 +295,9 @@ ul.lines.num{counter-reset:n}
 ul.lines.num li{counter-increment:n;padding-left:22px}
 ul.lines.num li::before{content:counter(n)".";position:absolute;left:0;top:0;width:auto;height:auto;
   background:none;border-radius:0;font-size:12.5px;font-weight:700;color:var(--accent);line-height:1.7}
+ul.lines.hx li.sub{padding-left:32px;font-size:13px;color:var(--ink2);margin-bottom:3px}
+ul.lines.hx li.sub::before{content:"–";left:17px;top:0;width:auto;height:auto;background:none;
+  border-radius:0;color:var(--muted);font-size:13px;line-height:1.6}
 .narr{font-size:14px;line-height:1.62;word-break:break-word;white-space:pre-wrap}
 .narr .np{color:var(--muted)}
 
@@ -1075,6 +1078,17 @@ function sec(title, zh, kind, bodyHTML, empty){
       <button class="edt" data-edit="${kind}" aria-label="編輯${zh||title}">${svgIcon(ICO.edit)}</button></div>
     ${body}</section>`;
 }
+/* 病史支援兩層：`#.` 是主項（顯示成圓點），`-` 開頭是上一項的子項（縮排、破折號）
+   —— 交班單就是這樣寫的，同一顆腫瘤的處置經過要看得出從屬關係 */
+function historyHTML(arr){
+  const a = (arr||[]).map(x=>String(x).trim()).filter(Boolean);
+  if(!a.length) return '';
+  return `<ul class="lines hx">${a.map(x=>{
+    const sub = /^[-–—•]\s*/.test(x);
+    const t = x.replace(/^[-–—•]\s*/,'').replace(/^#+\.?\s*/,'');
+    return `<li class="${sub?'sub':''}">${h(t)}</li>`;
+  }).join('')}</ul>`;
+}
 function linesHTML(arr, num){
   const a = (arr||[]).filter(x=>String(x).trim());
   if(!a.length) return '';
@@ -1197,7 +1211,7 @@ function detailHTML(p){
     </div>
   </div>
   <div class="sh-b" id="pd-body">
-    ${sec('Medical history','病史','history', linesHTML(p.history))}
+    ${sec('Medical history','病史','history', historyHTML(p.history))}
     ${sec('Present illness','現病史','pi', piHTML(p))}
     ${sec('Medication','用藥','meds', medsHTML(p))}
     ${sec('Vital signs','生命徵象','vitals', vitalsHTML(p))}
@@ -1347,7 +1361,10 @@ function summaryText(p){
   if(d) L.push((p.status==='er'?'ER since ':'Admission since ')+d+(p.dc_date?'，discharged '+p.dc_date:''));
   if(p.pending_op) L.push('** 待開刀 / Pending operation **' + (p.op_note?'：'+p.op_note:''));
   const add=(t,body)=>{ if(body && body.trim()){ L.push(''); L.push('# '+t); L.push(body.trim()); } };
-  add('Medical history', (p.history||[]).map(x=>'- '+x).join('\n'));
+  add('Medical history', (p.history||[]).map(x=>{
+    const t = String(x).trim();
+    return /^[-–—•]\s*/.test(t) ? '    - '+t.replace(/^[-–—•]\s*/,'') : '# '+t;
+  }).join('\n'));
   add('Present illness', [piNarrative(p.pi), p.pi.text, signNarrative(p.pi)].filter(Boolean).join('\n'));
   add('Medication', (p.meds||[]).map(m=>`- ${m.name} ${m.route||''} ${m.dose||''} ${m.freq||''}${m.route==='IF'&&m.rate?' @'+m.rate:''}${m.hold?' [hold '+m.hold+']':''}`.replace(/\s+/g,' ').trim()).join('\n'));
   add('Vital signs', (p.vitals||[]).map(v=>`- ${v.t||''} T ${v.T||'-'} P ${v.P||'-'} R ${v.R||'-'} BP ${v.BP||'-'} SpO2 ${v.SpO2||'-'}${v.O2?' ('+v.O2+')':''}${v.GCS?' GCS '+v.GCS:''}`).join('\n'));
@@ -1487,7 +1504,23 @@ const EDITORS = {
   },
 
   /* ---- 病史 ---- */
-  history: Object.assign({title:'Medical history 病史'}, linesEditor('history','DM type 2\nHTN\ns/p laparoscopic cholecystectomy 2019')),
+  history:{
+    title:'Medical history 病史',
+    body(p){ return `<div class="field">
+      <label class="lab">一行一項</label>
+      <textarea class="inp" data-f style="min-height:220px" placeholder="Transverse colon cancer with liver metastasis&#10;- s/p extended right hemicolectomy on 2016/02/03, pT3N1bM0&#10;- recurrence in 2019, s/p RFA&#10;Hypertension">${h((p.history||[]).join('\n'))}</textarea>
+      <p class="hintline">以 <span class="mono">-</span> 開頭的行會縮排成上一項的子項目；
+      貼上交班單時開頭的 <span class="mono">#.</span> 會自動去掉。</p></div>`; },
+    collect(root, p){
+      p.history = root.querySelector('[data-f]').value.split('\n').map(l=>{
+        const t = l.trim();
+        if(!t) return '';
+        const sub = /^[-–—•]\s*/.test(t);
+        const body = t.replace(/^[-–—•]\s*/,'').replace(/^#+\.?\s*/,'').trim();
+        return body ? (sub ? '- '+body : body) : '';
+      }).filter(Boolean);
+    }
+  },
 
   /* ---- 現病史 ---- */
   pi:{
@@ -2036,7 +2069,7 @@ function aboutSheet(){
 /* =========================================================================
  *  帳號 / 解鎖流程
  * ========================================================================= */
-const APPVER = '1.5.1';
+const APPVER = '1.6.0';
 function show(id){
   ['scr-setup','scr-auth','scr-lock','app'].forEach(x=> $('#'+x).classList.toggle('hide', x!==id));
 }
