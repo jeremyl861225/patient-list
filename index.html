@@ -341,9 +341,32 @@ table.gt .v{font-family:var(--mono);font-size:12.5px}
 table.gt .fl{font-size:10px;font-weight:700;margin-left:3px;vertical-align:1px}
 table.gt .fl.H{color:var(--danger)}
 table.gt .fl.L{color:var(--info)}
-/* 自動判讀的旗標畫得淡一點，跟報告單本來就寫 H／L 的區分開 */
-table.gt .fl.auto{font-weight:600;opacity:.72}
+/* 自動判讀的旗標畫得淡一點，跟報告單本來就寫 H／L 的區分開。
+ * HH／LL 是危險值，不論來源都要跳出來，所以不套這條淡化。 */
+table.gt .fl.H.auto,table.gt .fl.L.auto{font-weight:600;opacity:.72}
+table.gt .fl.HH,table.gt .fl.LL{padding:1px 4px;border-radius:4px;color:#fff;
+  font-size:9.5px;letter-spacing:.04em;vertical-align:1px}
+table.gt .fl.HH{background:var(--danger)}
+.fl.HH{background:var(--danger);color:#fff;padding:1px 4px;border-radius:4px;font-size:9.5px;font-weight:700}
+.fl.LL{background:var(--info);color:#fff;padding:1px 4px;border-radius:4px;font-size:9.5px;font-weight:700}
+table.gt .fl.LL{background:var(--info)}
 table.gt td.na{color:#C6BCA9}
+/* 檢驗參考值編輯列 */
+.refrow{padding:8px 0;border-bottom:1px solid var(--line-soft)}
+.refrow.on{background:linear-gradient(90deg,var(--card2),transparent);
+  box-shadow:inset 3px 0 0 var(--accent);padding-left:8px;border-radius:0 var(--r-sm) var(--r-sm) 0}
+.refh{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:13.5px;margin-bottom:5px}
+.refh .u{font-weight:400;color:var(--muted);font-size:11px}
+.refh .refsrc{font-size:10.5px;color:var(--muted);border:1px solid var(--line);
+  border-radius:99px;padding:0 6px;line-height:16px}
+.refrow.on .refh .refsrc{color:var(--accent);border-color:var(--accent)}
+.refh .btn.sm{margin-left:auto;padding:1px 8px;font-size:11.5px}
+.refi{display:flex;align-items:center;gap:4px;flex-wrap:wrap}
+.refi .rl{font-size:11px;color:var(--muted);flex:none}
+.refi .rl.crit{color:var(--danger);margin-left:6px}
+.refi i{color:var(--muted);font-style:normal;font-size:11px}
+input.refn{width:58px;height:28px;padding:0 6px;font-family:var(--mono);
+  font-size:12.5px;text-align:center;flex:none}
 
 /* 檢查 */
 .exam{padding:8px 9px;border:1px solid var(--line-soft);border-radius:var(--r-sm);background:var(--card2);margin:0 0 6px}
@@ -777,15 +800,15 @@ const EXAM_EXTRA = ['US','MRCP','ERCP','KUB','Angiography','Bone scan','Sono-gui
  */
 const LAB_REF = [
   /* --- CBC / 血液 --- */
-  {a:['wbc','wbccount','白血球'],          u:['k/ul','10^3/ul','x10^3/ul','1000/ul'], lo:3.25, hi:9.16, src:'ntuh'},
+  {a:['wbc','wbccount','白血球'],          u:['k/ul','10^3/ul','x10^3/ul','1000/ul'], lo:3.25, hi:9.16, src:'ntuh', cL:1.0, cH:30},
   {a:['rbc','rbccount','紅血球'],           u:['m/ul','10^6/ul','x10^6/ul'], M:[4.4,5.9], F:[3.8,5.2], src:'std'},
-  {a:['hb','hgb','hemoglobin','血色素'],    u:['g/dl'], M:[13.1,17.2], F:[11.0,15.2], src:'ntuh'},
-  {a:['hct','hematocrit','血比容'],         u:['%'], M:[39,50], F:[34,45], src:'std'},
+  {a:['hb','hgb','hemoglobin','血色素'],    u:['g/dl'], M:[13.1,17.2], F:[11.0,15.2], src:'ntuh', cL:7.0},
+  {a:['hct','hematocrit','血比容'],         u:['%'], M:[39,50], F:[34,45], src:'std', cL:21},
   {a:['mcv'],                               u:['fl'], lo:80.9, hi:99.3, src:'ntuh'},
   {a:['mch'],                               u:['pg'], lo:27, hi:34, src:'std'},
   {a:['mchc'],                              u:['g/dl'], lo:32, hi:36, src:'std'},
   {a:['rdw','rdwcv'],                       u:['%'], lo:11.5, hi:14.5, src:'std'},
-  {a:['plt','platelet','血小板'],           u:['k/ul','10^3/ul','x10^3/ul','1000/ul'], lo:150, hi:378, src:'ntuh'},
+  {a:['plt','platelet','血小板'],           u:['k/ul','10^3/ul','x10^3/ul','1000/ul'], lo:150, hi:378, src:'ntuh', cL:20, cH:1000},
   {a:['seg','segment','neutrophil','neut'], u:['%'], lo:40, hi:75, src:'std'},
   {a:['band'],                              u:['%'], lo:0, hi:5, src:'std'},
   {a:['lym','lymphocyte','lymph'],          u:['%'], lo:20, hi:45, src:'std'},
@@ -794,24 +817,24 @@ const LAB_REF = [
   {a:['baso','basophil'],                   u:['%'], lo:0, hi:2, src:'std'},
   /* --- 凝血 --- */
   {a:['pt','prothrombintime'],              u:['sec','s'], lo:9.5, hi:11.8, src:'std'},
-  {a:['ptinr','inr'], n:'PT INR',          u:[''], lo:0.8, hi:1.2, src:'std'},
-  {a:['aptt','ptt'],                        u:['sec','s'], lo:23.9, hi:35.5, src:'std'},
+  {a:['ptinr','inr'], n:'PT INR',          u:[''], lo:0.8, hi:1.2, src:'std', cH:4.5},
+  {a:['aptt','ptt'],                        u:['sec','s'], lo:23.9, hi:35.5, src:'std', cH:100},
   {a:['ddimer'], n:'D-dimer',              u:['mg/lfeu','mg/l','ug/mlfeu'], lo:null, hi:0.5, src:'std'},
   {a:['fibrinogen'],                        u:['mg/dl'], lo:200, hi:400, src:'std'},
   /* --- 生化 --- */
-  {a:['glu','glucose','ac','sugar','血糖'], u:['mg/dl'], lo:70, hi:99, src:'std'},
+  {a:['glu','glucose','ac','sugar','血糖'], u:['mg/dl'], lo:70, hi:99, src:'std', cL:50, cH:500},
   {a:['bun','un','ureanitrogen'], n:'BUN／UN',u:['mg/dl'], lo:6, hi:24, src:'ntuh'},
   {a:['cre','cr','creatinine','肌酸酐'],    u:['mg/dl'], lo:0.5, hi:1.4, src:'ntuh'},
   {a:['ua','uricacid','尿酸'],              u:['mg/dl'], M:[3.5,7.2], F:[2.6,6.0], src:'std'},
-  {a:['na','sodium'],                       u:['mmol/l','meq/l'], lo:135, hi:145, src:'std'},
-  {a:['k','potassium'],                     u:['mmol/l','meq/l'], lo:3.5, hi:5.1, src:'std'},
+  {a:['na','sodium'],                       u:['mmol/l','meq/l'], lo:135, hi:145, src:'std', cL:120, cH:160},
+  {a:['k','potassium'],                     u:['mmol/l','meq/l'], lo:3.5, hi:5.1, src:'std', cL:2.8, cH:6.2},
   {a:['cl','chloride'],                     u:['mmol/l','meq/l'], lo:98, hi:107, src:'std'},
-  {a:['ca','calcium'],                      u:['mg/dl'], lo:8.6, hi:10.3, src:'std',
-    alt:[{u:['mmol/l'], lo:2.15, hi:2.55, src:'ntuh'}]},
+  {a:['ca','calcium'],                      u:['mg/dl'], lo:8.6, hi:10.3, src:'std', cL:6.5, cH:13.5,
+    alt:[{u:['mmol/l'], lo:2.15, hi:2.55, src:'ntuh', cL:1.65, cH:3.38}]},
   {a:['ica','ionizedcalcium'], n:'iCa',     u:['mmol/l'], lo:1.15, hi:1.35, src:'std'},
-  {a:['p','phosphate','phosphorus'],        u:['mg/dl'], lo:2.5, hi:5.0, src:'ntuh'},
-  {a:['mg','magnesium'],                    u:['mg/dl'], lo:1.8, hi:2.4, src:'std',
-    alt:[{u:['mmol/l'], lo:0.65, hi:1.05, src:'std'}]},
+  {a:['p','phosphate','phosphorus'],        u:['mg/dl'], lo:2.5, hi:5.0, src:'ntuh', cL:1.0},
+  {a:['mg','magnesium'],                    u:['mg/dl'], lo:1.8, hi:2.4, src:'std', cL:1.0, cH:4.7,
+    alt:[{u:['mmol/l'], lo:0.65, hi:1.05, src:'std', cL:0.41, cH:1.93}]},
   {a:['ast','got','astgot'],                u:['u/l'], lo:0, hi:40, src:'std'},
   {a:['alt','gpt','altgpt'],                u:['u/l'], lo:0, hi:40, src:'std'},
   {a:['alp','alkalinephosphatase'],         u:['u/l'], lo:40, hi:130, src:'std'},
@@ -825,7 +848,7 @@ const LAB_REF = [
   {a:['amylase'],                           u:['u/l'], lo:28, hi:100, src:'std'},
   {a:['lipase'],                            u:['u/l'], lo:13, hi:60, src:'std'},
   {a:['ammonia','nh3'],                     u:['umol/l'], lo:11, hi:51, src:'std'},
-  {a:['lacticacid','lactate','lac'], n:'Lactic acid', u:['mmol/l'], lo:0.5, hi:2.2, src:'std'},
+  {a:['lacticacid','lactate','lac'], n:'Lactic acid', u:['mmol/l'], lo:0.5, hi:2.2, src:'std', cH:4.0},
   {a:['crp','hscrp'], n:'CRP / hsCRP',      u:['mg/dl'], lo:null, hi:0.5, src:'std'},
   {a:['procalcitonin','pct'], n:'PCT',      u:['ng/ml'], lo:null, hi:0.05, src:'std'},
   {a:['chol','cholesterol','tchol'],        u:['mg/dl'], lo:null, hi:200, src:'std'},
@@ -836,10 +859,10 @@ const LAB_REF = [
   {a:['tsh'],                               u:['uiu/ml','miu/l'], lo:0.34, hi:5.6, src:'std'},
   {a:['freet4','ft4'], n:'Free T4',         u:['ng/dl'], lo:0.7, hi:1.48, src:'std'},
   /* --- 血液氣體（動脈） --- */
-  {a:['ph'],                                u:[''], lo:7.35, hi:7.45, src:'std'},
-  {a:['pco2','paco2'],                      u:['mmhg'], lo:35, hi:45, src:'std'},
-  {a:['po2','pao2'],                        u:['mmhg'], lo:80, hi:100, src:'std'},
-  {a:['hco3','bicarbonate'],                u:['mmol/l','meq/l'], lo:22, hi:26, src:'std'},
+  {a:['ph'],                                u:[''], lo:7.35, hi:7.45, src:'std', cL:7.20, cH:7.60},
+  {a:['pco2','paco2'],                      u:['mmhg'], lo:35, hi:45, src:'std', cL:20, cH:70},
+  {a:['po2','pao2'],                        u:['mmhg'], lo:80, hi:100, src:'std', cL:50},
+  {a:['hco3','bicarbonate'],                u:['mmol/l','meq/l'], lo:22, hi:26, src:'std', cL:10, cH:40},
   {a:['be','baseexcess'],                   u:['mmol/l','meq/l'], lo:-2, hi:2, src:'std'},
   {a:['sao2','sat'],                        u:['%'], lo:95, hi:100, src:'std'}
 ];
@@ -870,17 +893,39 @@ const prettyUnit = u => UNIT_TEXT[u] || u;
 function labVariant(d, u){
   if(!u || d.u.includes(u)) return d;
   const v = (d.alt||[]).find(x=>x.u.includes(u));
-  return v ? {a:d.a, n:d.n, u:v.u, lo:v.lo, hi:v.hi, M:v.M, F:v.F, src:v.src||d.src} : null;
+  return v ? {a:d.a, n:d.n, u:v.u, lo:v.lo, hi:v.hi, M:v.M, F:v.F,
+              cL:v.cL, cH:v.cH, src:v.src||d.src} : null;
+}
+/* 自訂的參考值／危險值：存本機（pl.labref），key 是「代號|單位」。
+ * 表裡的預設值不動，只是被蓋過去，隨時可以還原。 */
+const refKey = d => d.a[0] + '|' + (d.u[0]||'');
+function loadRefOverride(){
+  try{ return JSON.parse(localStorage.getItem('pl.labref') || '{}') || {}; }
+  catch(e){ return {}; }
+}
+let REF_OVR = loadRefOverride();
+function saveRefOverride(){ localStorage.setItem('pl.labref', JSON.stringify(REF_OVR)); }
+/* 套用自訂值；回傳的物件已經是可以直接用的那一組數字 */
+function withOverride(d){
+  const o = REF_OVR[refKey(d)];
+  if(!o) return d;
+  const r = Object.assign({}, d);
+  ['lo','hi','cL','cH'].forEach(k=>{ if(k in o) r[k] = o[k]; });
+  if('lo' in o || 'hi' in o){ delete r.M; delete r.F; }   // 自訂就是單一區間
+  r.custom = true;
+  return r;
 }
 function labRefOf(item, sex){
   if(!labAuto()) return null;
   const d0 = LAB_INDEX.get(normLabName(item && item.name));
   if(!d0) return null;
-  const d = labVariant(d0, normUnit(item.unit));
-  if(!d) return null;                         // 單位對不上就不判讀
+  const v = labVariant(d0, normUnit(item.unit));
+  if(!v) return null;                         // 單位對不上就不判讀
+  const d = withOverride(v);
   const [lo, hi] = refRange(d, sex);
-  if(lo==null && hi==null) return null;
-  return {lo, hi, unit:(item.unit||'').trim() || prettyUnit(d.u[0]), src:d.src};
+  if(lo==null && hi==null && d.cL==null && d.cH==null) return null;
+  return {lo, hi, cL:d.cL==null?null:d.cL, cH:d.cH==null?null:d.cH,
+          unit:(item.unit||'').trim() || prettyUnit(d.u[0]), src:d.src, custom:!!d.custom};
 }
 /* 兩端小數位數對齊，免得 2.5–5.0 印成 2.5–5 */
 function rangeText(lo, hi){
@@ -890,16 +935,24 @@ function rangeText(lo, hi){
   return hi!=null ? `≤ ${hi}` : `≥ ${lo}`;
 }
 function refText(r){
-  return `參考值 ${rangeText(r.lo, r.hi)}${r.unit?' '+r.unit:''}（${r.src==='ntuh'?'台大檢驗醫學部':'通用成人值'}）`;
+  const src = r.custom ? '自訂' : (r.src==='ntuh' ? '台大檢驗醫學部' : '通用成人值');
+  const u = r.unit ? ' '+r.unit : '';
+  const crit = (r.cL!=null || r.cH!=null)
+    ? `　危險值 ${[r.cL!=null?'≤ '+r.cL:'', r.cH!=null?'≥ '+r.cH:''].filter(Boolean).join(' / ')}${u}` : '';
+  return `參考值 ${rangeText(r.lo, r.hi)}${u}（${src}）${crit}`;
 }
 /* 把一格檢驗值拆成 {值, H/L, 是不是自動判讀的} */
 function labParts(val, ref){
   const s = String(val==null?'':val);
-  const m = s.match(/^(.*?)\s*([HL])$/);
-  if(m) return {v:m[1], f:m[2], auto:false};   // 資料自己寫的 H／L 最大
+  // 資料自己寫的旗標最大；要求前面是數字，免得 NORMAL 這種字尾被當成 L
+  const m = s.match(/^(.*?\d)\s*(HH|LL|H|L)$/);
+  if(m) return {v:m[1], f:m[2], auto:false};
   const t = s.trim();
   if(ref && /^-?\d+(?:\.\d+)?$/.test(t)){
     const n = Number(t);
+    // 危險值優先於參考值：HH／LL 代表要馬上處理，不只是超出正常範圍
+    if(ref.cH!=null && n >= ref.cH) return {v:s, f:'HH', auto:true};
+    if(ref.cL!=null && n <= ref.cL) return {v:s, f:'LL', auto:true};
     if(ref.hi!=null && n > ref.hi) return {v:s, f:'H', auto:true};
     if(ref.lo!=null && n < ref.lo) return {v:s, f:'L', auto:true};
   }
@@ -1939,7 +1992,8 @@ const EDITORS = {
         <div class="field" style="flex:none"><button class="btn" id="lb-additem">加項目</button></div></div>
       <div class="field"><button class="btn sm" id="lb-paste">貼上檢驗報告文字自動帶入</button>
         <p class="hintline">數值後面加 <span class="mono">H</span> 或 <span class="mono">L</span>（例：<span class="mono">12.3 H</span>）會標成紅／藍。
-        沒寫的話，App 會依參考值自己判讀並標成比較淡的 H／L（「⋮ → 檢驗參考值」可看區間，「⋮ → 檢驗自動判讀」可關掉）。
+        沒寫的話，App 會依參考值自己判讀並標成比較淡的 H／L，超過危險值則標成 <span class="fl HH">HH</span>／<span class="fl LL">LL</span>。
+        區間與危險值都能在「⋮ → 檢驗參考值」裡直接改，「⋮ → 檢驗自動判讀」可整個關掉。
         自動判讀只是輔助，<b>單位一定要填對</b>才判得準。</p></div>`;
     },
     mount(root, p){
@@ -2263,26 +2317,63 @@ function mainMenu(anchor){
 const labRefName = d => d.n || (d.a[0].length<=5
   ? d.a[0].toUpperCase() : d.a[0][0].toUpperCase()+d.a[0].slice(1));
 function refSheet(){
-  const fmt = d=>{
-    const one = r => rangeText(r[0], r[1]);
-    if(d.M || d.F) return [d.M?'♂ '+one(d.M):'', d.F?'♀ '+one(d.F):''].filter(Boolean).join('　');
-    return one([d.lo==null?null:d.lo, d.hi==null?null:d.hi]);
+  /* 把 alt 攤平成一列一組（項目＋單位＋區間＋危險值），每一組都可以就地改 */
+  const rows = LAB_REF.flatMap(d=>[
+    {a:d.a, n:labRefName(d), u:d.u, lo:d.lo, hi:d.hi, M:d.M, F:d.F, cL:d.cL, cH:d.cH, src:d.src},
+    ...(d.alt||[]).map(v=>({a:d.a, n:labRefName(d), u:v.u, lo:v.lo, hi:v.hi,
+                            M:v.M, F:v.F, cL:v.cL, cH:v.cH, src:v.src||d.src}))]);
+  const num = x => x==null ? '' : String(x);
+  const cur = r => Object.assign({}, r, REF_OVR[refKey(r)]||{});
+  const box = (r, k, ph) => `<input class="inp refn" inputmode="decimal" data-k="${h(refKey(r))}"
+      data-f="${k}" value="${h(num(cur(r)[k]))}" placeholder="${ph}">`;
+  const line = r=>{
+    const c = cur(r), edited = !!REF_OVR[refKey(r)];
+    const sexNote = (r.M||r.F) && !edited
+      ? `<span class="hintline" style="margin:0 0 0 4px">♂ ${rangeText(...(r.M||[]))}　♀ ${rangeText(...(r.F||[]))}</span>` : '';
+    return `<div class="refrow${edited?' on':''}">
+      <div class="refh"><b>${h(r.n)}</b>${r.u[0]?`<span class="u">${h(prettyUnit(r.u[0]))}</span>`:''}
+        <span class="refsrc">${edited?'自訂':(r.src==='ntuh'?'台大':'通用')}</span>
+        ${edited?`<button class="btn sm" data-reset="${h(refKey(r))}">還原</button>`:''}</div>
+      <div class="refi"><span class="rl">參考</span>${box(r,'lo','低')}<i>–</i>${box(r,'hi','高')}
+        <span class="rl crit">危險</span>${box(r,'cL','≤')}<i>/</i>${box(r,'cH','≥')}</div>
+      ${sexNote}</div>`;
   };
-  openSheet({title:'檢驗參考值', body:`
+  openSheet({title:'檢驗參考值', wide:true, body:`
     <p style="margin:0 0 10px;font-size:13.5px;line-height:1.7">
-    成人區間。<b>單位對不上就不判讀</b>（例如 CRP 用 mg/L、WBC 用 /µL 時差一個數量級），
-    值不是純數字也不判讀。資料裡本來就寫了 H／L 的以資料為準。</p>
+    成人區間。<b>參考值</b>決定 <span class="mono" style="color:var(--danger)">H</span>／<span class="mono" style="color:var(--info)">L</span>，
+    <b>危險值</b>決定 <span class="fl HH">HH</span>／<span class="fl LL">LL</span>——只有你填了危險值的項目才會出現 HH／LL，
+    沒填的最多到 H／L，不會亂猜。</p>
+    <p style="margin:0 0 10px;font-size:13.5px;line-height:1.7">
+    <b>單位對不上就整格不判讀</b>（CRP 用 mg/L、WBC 用 /µL 時差一個數量級），值不是純數字也不判讀。
+    報告單本來就寫了 H／L 的以報告單為準。</p>
     <p style="margin:0 0 12px;font-size:13.5px;line-height:1.7">
-    標<span class="mono" style="color:var(--danger)">台大</span>的是台大檢驗醫學部公布的區間；
-    標<span class="mono">通用</span>的還沒逐項核對台大公告值，<b>請照院內報告單校正</b>。</p>
-    <table class="gt">
-      <tbody>${LAB_REF.flatMap(d=>[d, ...(d.alt||[]).map(v=>
-        ({a:d.a, n:labRefName(d), u:v.u, lo:v.lo, hi:v.hi, M:v.M, F:v.F, src:v.src||d.src}))]).map(d=>`<tr>
-        <td class="stick">${h(labRefName(d))}</td>
-        <td class="v">${h(fmt(d))}${d.u[0]?`<span class="u">${h(prettyUnit(d.u[0]))}</span>`:''}</td>
-        <td class="v" style="width:1%;white-space:nowrap;${d.src==='ntuh'?'color:var(--danger)':'color:var(--muted)'}">${d.src==='ntuh'?'台大':'通用'}</td>
-      </tr>`).join('')}</tbody></table>
-    <p class="hintline">共 ${LAB_REF.length} 項（同一項目有兩種單位的分列）；辨識名稱時大小寫、空白與 <span class="mono">-</span>／<span class="mono">_</span> 都會忽略（<span class="mono">T-BIL</span>＝<span class="mono">tbil</span>）。</p>`});
+    標<span class="mono" style="color:var(--danger)">台大</span>的是台大檢驗醫學部公布的區間，
+    標<span class="mono">通用</span>的還沒逐項核對——<b>直接在下面改就好</b>，改動只存在這台裝置，按「還原」回到預設。</p>
+    <div id="reflist">${rows.map(line).join('')}</div>
+    <p class="hintline">共 ${rows.length} 組（同一項目兩種單位分開列）；辨識名稱時大小寫、空白與 <span class="mono">-</span>／<span class="mono">_</span> 都會忽略（<span class="mono">T-BIL</span>＝<span class="mono">tbil</span>）。</p>`,
+    footer:`<button class="btn" id="ref-reset-all">全部還原預設</button>`,
+    onMount(ov){
+      const repaint = ()=>{ ov.querySelector('#reflist').innerHTML = rows.map(line).join(''); bind(); };
+      function bind(){
+        ov.querySelectorAll('.refn').forEach(f=> f.onchange = ()=>{
+          const k = f.dataset.k, key = f.dataset.f, raw = f.value.trim();
+          const o = REF_OVR[k] = REF_OVR[k] || {};
+          if(raw === '') delete o[key];
+          else { const n = Number(raw); if(!isFinite(n)){ f.value=''; return; } o[key] = n; }
+          if(!Object.keys(o).length) delete REF_OVR[k];
+          saveRefOverride(); repaint();
+        });
+        ov.querySelectorAll('[data-reset]').forEach(b=> b.onclick = ()=>{
+          delete REF_OVR[b.dataset.reset]; saveRefOverride(); repaint();
+        });
+      }
+      bind();
+      ov.querySelector('#ref-reset-all').onclick = async ()=>{
+        if(!Object.keys(REF_OVR).length) return toast('目前沒有自訂值');
+        if(!await confirmSheet('全部還原', '把所有自訂的參考值與危險值清掉，回到內建預設？', '還原')) return;
+        REF_OVR = {}; saveRefOverride(); repaint(); toast('已還原預設');
+      };
+    }});
 }
 function aboutSheet(){
   openSheet({title:'關於 Patient List', body:`
@@ -2299,6 +2390,8 @@ function aboutSheet(){
       <li>結束追蹤只是移到「已結束」分頁，資料保留。</li>
       <li>Lab 表格過寬時可以左右滑動，第一欄會固定。</li>
       <li>檢驗值會依參考值自動標 H／L（淡色）；報告單本來就寫的 H／L 顏色較深，永遠以它為準。單位對不上就不判讀。</li>
+      <li>另外有一組危險值，超過就標成 <span class="fl HH">HH</span>／<span class="fl LL">LL</span>（實心底色）。只有填了危險值的項目才會出現，其餘最多到 H／L。</li>
+      <li>參考值與危險值都能在「⋮ → 檢驗參考值」裡直接改，改動只存在這台裝置，隨時可還原。</li>
       <li>每個欄位都能自己增補：生命徵象每個時間點有備註欄，檢查類型可以自己打（US、MRCP…）。</li>
       <li>匯出的 JSON 是明文，含可識別資料，請小心保存。</li>
       <li>右上角的狀態會顯示「離線」或「N 筆待上傳」。</li>
@@ -2310,7 +2403,7 @@ function aboutSheet(){
 /* =========================================================================
  *  帳號 / 解鎖流程
  * ========================================================================= */
-const APPVER = '1.8.3';
+const APPVER = '1.9.0';
 function show(id){
   ['scr-setup','scr-auth','scr-lock','app'].forEach(x=> $('#'+x).classList.toggle('hide', x!==id));
 }
