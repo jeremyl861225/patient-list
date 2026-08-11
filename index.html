@@ -348,19 +348,20 @@ table.gt thead th{background:var(--card2);font-size:11.5px;font-weight:700;color
 table.gt tbody tr:last-child td{border-bottom:none}
 table.gt .stick{position:sticky;left:0;background:var(--card);z-index:1;
   box-shadow:1px 0 0 var(--line-soft);font-weight:600}
-/* 第一欄限寬：eGFR CKD-EPI (mL/min/1.73m^2) 這種長名稱會把整張表推出畫面，
- * 檢驗有五十幾列，所以不折行改成單行截斷——項目名稱先被看到，單位才被切，
- * 完整文字放在 title 裡。數值欄不受影響。 */
-table.gt tbody td.stick{max-width:min(42vw,168px);overflow:hidden;text-overflow:ellipsis}
+/* 第一欄限寬「只在真的塞不下時」才啟用——.capped 是 fitTables() 量過版面才加上去的。
+ * 電腦上永遠不加；手機上資料少、整張表塞得進畫面時也不加，欄寬就自己撐滿，
+ * 不會像限死寬度那樣在右邊留一片空白。
+ * 限寬時不折行、改成單行截斷（檢驗有五十幾列，折行會變得很難掃），
+ * 項目名稱先被看到、單位才被切，完整文字放在 title 裡。數值欄不受影響。 */
+table.gt.capped tbody td.stick{max-width:min(42vw,168px);overflow:hidden;text-overflow:ellipsis}
 /* 檢驗表的項目名稱上限＝「plasmacell %」剛好放得下（文字 92.5px + 左右 padding 20px，
- * 取 116px 留一點餘裕給不同裝置的字體寬度）。省下來的寬度留給時間欄；
- * 超過就截斷成 …，整張表本來就能左右滑（.tscroll），完整名稱看 title。
- * 生命徵象的第一欄是時間戳，不套這條，免得被切掉。 */
-table.gt.lab .stick{max-width:116px}
-table.gt.lab thead .stick{overflow:hidden;text-overflow:ellipsis}
-table.gt.lab td.stick .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+ * 取 116px 留一點餘裕給不同裝置的字體寬度）。省下來的寬度留給時間欄。
+ * 生命徵象的第一欄是時間戳，沿用上面那條比較寬的，免得被切掉。 */
+table.gt.labtb.capped .stick{max-width:116px}
+table.gt.labtb.capped thead .stick{overflow:hidden;text-overflow:ellipsis}
+table.gt.labtb td.stick .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 /* 編輯頁那格前面多一顆刪除鈕（22px＋5px gap），加回去才裝得下一樣長的名稱 */
-#lb-grid.gt.lab .stick{max-width:143px}
+#lb-grid.capped .stick{max-width:143px}
 table.gt thead .stick{background:var(--card2);z-index:3}
 table.gt tbody tr:nth-child(even) td{background:var(--card2)}
 table.gt tbody tr:nth-child(even) .stick{background:var(--card2)}
@@ -1442,6 +1443,21 @@ function vitalsHTML(p){
       ${VITAL_KEYS.map(k=>v[k]?`<td class="v">${h(v[k])}</td>`:'<td class="na">–</td>').join('')}
     </tr>`).join('')}</tbody></table></div>`;
 }
+/* 第一欄要不要限寬，取決於整張表塞不塞得進版面——CSS 問不到這件事，只能量。
+ * 電腦（≥640px）一律不限，畫面夠寬，名稱完整顯示比較有用。
+ * 手機先把限制拿掉量自然寬度，真的溢出容器才加回 .capped；
+ * 這樣資料少的病人欄寬會自己撐滿，不會右邊空一大片。 */
+const CAP_FROM = 640;
+function fitTables(root){
+  (root||document).querySelectorAll('.tscroll > table.gt').forEach(t=>{
+    t.classList.remove('capped');
+    if(window.innerWidth >= CAP_FROM) return;
+    const wrap = t.parentElement;                 // 讀 scrollWidth 會強制重排，量到的是沒限寬的結果
+    if(wrap.scrollWidth > wrap.clientWidth + 1) t.classList.add('capped');
+  });
+}
+window.addEventListener('resize', ()=> fitTables());
+
 function labCell(val, ref){
   if(val==null || val==='') return '<td class="na">–</td>';
   const q = labParts(val, ref);
@@ -1454,7 +1470,7 @@ function labsHTML(p){
   const L = p.labs;
   if(!L.items.length || !L.cols.length) return '';
   const cols = L.cols.slice().sort();
-  return `<div class="tscroll"><table class="gt lab">
+  return `<div class="tscroll"><table class="gt labtb">
     <thead><tr><th class="stick">檢驗項目</th>${cols.map(c=>
       `<th title="${h(c)}">${h(shortStamp(c))}</th>`).join('')}</tr></thead>
     <tbody>${L.items.map(it=>{
@@ -1564,6 +1580,7 @@ function openPatient(id){
         sheet.querySelectorAll('[data-edit]').forEach(b=>{
           b.onclick = ()=> openEditor(b.dataset.edit, cur, paint);
         });
+        fitTables(sheet);
         // 三個勾選框直接在病人頁上點，不重畫整頁（免得捲動位置跳掉）
         sheet.querySelectorAll('[data-opck]').forEach(b=>{
           b.onclick = ()=>{
@@ -2086,7 +2103,7 @@ const EDITORS = {
           <button class="btn" id="lb-addcol" style="flex:none">加時間</button></div></div>
       <div class="field"><label class="lab">檢驗表 <span class="op">列＝項目、欄＝時間</span></label>
         <div class="tscroll" style="margin:0;border:1px solid var(--line);border-radius:var(--r-sm)">
-          <table class="gt lab" id="lb-grid"></table></div></div>
+          <table class="gt labtb" id="lb-grid"></table></div></div>
       <div class="row"><div class="field" style="flex:2"><input class="inp" id="lb-newitem" placeholder="項目 WBC"></div>
         <div class="field"><input class="inp" id="lb-newunit" placeholder="單位 K/µL"></div>
         <div class="field" style="flex:none"><button class="btn" id="lb-additem">加項目</button></div></div>
@@ -2111,6 +2128,7 @@ const EDITORS = {
             ${cols.map(c=>`<td><input class="inp mini" style="width:96px;height:30px;padding:0 7px"
                data-cell data-k="${h(it.name+'|'+c)}" value="${h(L.vals[it.name+'|'+c]||'')}"></td>`).join('')}
           </tr>`).join('') || `<tr><td class="stick" style="color:var(--muted)">尚無項目</td></tr>`}</tbody>`;
+        fitTables(root);
         grid.querySelectorAll('[data-cell]').forEach(f=> f.oninput = ()=>{
           const v = f.value.trim();
           if(v) L.vals[f.dataset.k] = v; else delete L.vals[f.dataset.k];
@@ -2509,7 +2527,7 @@ function aboutSheet(){
 /* =========================================================================
  *  帳號 / 解鎖流程
  * ========================================================================= */
-const APPVER = '1.11.2';
+const APPVER = '1.12.0';
 function show(id){
   ['scr-setup','scr-auth','scr-lock','app'].forEach(x=> $('#'+x).classList.toggle('hide', x!==id));
 }
