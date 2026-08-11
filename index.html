@@ -157,6 +157,24 @@ main{padding:14px 0 96px}
   overflow:hidden;text-overflow:ellipsis}
 .opb.big{font-size:12.5px;padding:6px 12px 6px 9px}
 .opb.big svg{width:15px;height:15px}
+
+/* 待開刀的三個前置作業：同意書／麻醉科／on 急刀 */
+.opck{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.opck-b{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;line-height:1;
+  padding:6px 11px 6px 7px;border-radius:999px;border:1px solid var(--line);background:var(--card);
+  color:var(--ink2);white-space:nowrap;transition:background .15s,border-color .15s,color .15s}
+.opck-b .bx{width:16px;height:16px;border-radius:5px;border:1.6px solid var(--line);background:var(--card);
+  flex:none;display:grid;place-items:center}
+.opck-b .bx svg{width:10px;height:10px;color:#fff;opacity:0}
+.opck-b.on{border-color:#CFE0D2;background:var(--accent-soft);color:var(--accent-ink)}
+.opck-b.on .bx{background:var(--accent);border-color:var(--accent)}
+.opck-b.on .bx svg{opacity:1}
+button.opck-b:hover{border-color:#C9BFA8}
+/* 卡片上的縮小版：只是狀態顯示，不能點 */
+.opck.mini{gap:5px;margin-top:6px}
+.opck.mini .opck-b{font-size:11.5px;font-weight:500;padding:3px 8px 3px 5px}
+.opck.mini .opck-b .bx{width:13px;height:13px;border-radius:4px}
+.opck.mini .opck-b .bx svg{width:8px;height:8px}
 .pt .r0{display:block;margin:0 0 6px}
 .pt.op{border-color:#E3BDB5;background:linear-gradient(180deg,#FDF3F0 0%,var(--card) 46%)}
 .pt.op .bar{background:var(--danger) !important}
@@ -510,6 +528,9 @@ input.refn{width:58px;height:28px;padding:0 6px;font-family:var(--mono);
   .fab,.btn.pri,.chip.on,.seg button.on,.tbtn[aria-pressed="true"]{color:#17140F}
   .opb{color:#1A1512}
   .ckbox.on svg{color:#17140F}
+  .opck-b.on{border-color:#4E6656}
+  .opck-b.on .bx svg{color:#17140F}
+  button.opck-b:hover{border-color:#4A4238}
   .fab{box-shadow:0 6px 20px rgba(0,0,0,.5)}
 }
 </style>
@@ -782,6 +803,13 @@ const BOWEL = ['hypoactive','normoactive','hyperactive'];
 const VITAL_KEYS = ['T','P','R','BP','SpO2','O2','GCS','note'];
 const ROUTES = ['PO','IV','IF'];
 const FREQS  = ['QD','BID','TID','QID','Q6H','Q8H','Q12H','HS','QOD','PRN','STAT','ST'];
+/* 待開刀之前一定要跑完的三件事，勾完才代表刀排得成 */
+const OPCK = [
+  {k:'consent', t:'同意書',   en:'consent'},
+  {k:'anes',    t:'麻醉科',   en:'anesthesia'},
+  {k:'emerg',   t:'on 急刀',  en:'emergency OR booked'}
+];
+const blankOpCk = ()=> OPCK.reduce((o,c)=>(o[c.k]=false, o), {});
 const EXAM_TYPES = ['EKG','CXR','Echo','CT','EGD','CFS','MRI','PET','其他'];
 const EXAM_EXTRA = ['US','MRCP','ERCP','KUB','Angiography','Bone scan','Sono-guided','其他影像'];
 
@@ -963,7 +991,7 @@ function labParts(val, ref){
 function blankPatient(){
   return {
     v:1, id:uid(), mrn:'', name:'', sex:'', age:'', vs:'', bed:'',
-    status:'er', tracking:true, pending_op:false, op_note:'',
+    status:'er', tracking:true, pending_op:false, op_note:'', op_ck:blankOpCk(),
     er_date:todayStr(), adm_date:'', dc_date:'',
     history:[], pi:{ symptoms:{}, npo_since:'', signs:{}, text:'' },
     meds:[], vitals:[], labs:{items:[], cols:[], vals:{}}, exams:[],
@@ -984,6 +1012,9 @@ function normalize(p){
   o.tracking = o.tracking !== false;
   o.pending_op = o.pending_op === true;
   o.op_note = o.op_note || '';
+  // 舊資料沒有 op_ck，補成三個都沒勾；沒在待開刀就一律清空，免得下一台刀沿用上一台的勾
+  const ck = (o.op_ck && typeof o.op_ck==='object') ? o.op_ck : {};
+  o.op_ck = OPCK.reduce((a,c)=>(a[c.k] = o.pending_op && ck[c.k]===true, a), {});
   return o;
 }
 const admitDateOf = p => p.status==='ward' ? (p.adm_date||p.er_date) : (p.er_date||p.adm_date);
@@ -1099,6 +1130,16 @@ function opBadge(p, big){
   return `<span class="opb${big?' big':''}">${svgIcon(ICO.knife,1.9)}待開刀${
     p.op_note?`<em>${h(p.op_note)}</em>`:''}</span>`;
 }
+/* 三個小勾選框：live=true 是病人頁上可以直接點的版本，false 是卡片上的唯讀縮小版
+   （卡片本身是 <button>，裡面不能再放 button） */
+function opCkHTML(p, live){
+  const ck = p.op_ck || {};
+  const tag = live ? 'button' : 'span';
+  return `<${live?'div':'span'} class="opck${live?'':' mini'}">${OPCK.map(c=>
+    `<${tag} class="opck-b${ck[c.k]?' on':''}"${live
+      ? ` type="button" data-opck="${c.k}" aria-pressed="${ck[c.k]?'true':'false'}"`
+      : ''}><span class="bx">${svgIcon(ICO.check,3)}</span>${c.t}</${tag}>`).join('')}</${live?'div':'span'}>`;
+}
 function cardHTML(p){
   const dc = p.dc_date ? `<span class="tag off">出院 ${fmtDate(p.dc_date)}</span>` : '';
   const npo = p.pi && p.pi.npo_since ? `<span class="tag warn">NPO ${fmtDate(p.pi.npo_since)}</span>` : '';
@@ -1112,6 +1153,7 @@ function cardHTML(p){
       <span class="r1">${bed}<span class="nm">${h(p.name)||'（未填姓名）'}</span><span class="mrn">${h(p.mrn)||'—'}</span>
         <span class="meta">${h(ageShort(p))}${p.vs?`<span class="vs"> · VS ${h(p.vs)}</span>`:''}</span></span>
       ${(dc||npo||off)?`<span class="r3">${dc}${npo}${off}</span>`:''}
+      ${p.pending_op?opCkHTML(p, false):''}
       ${ax.length?`<span class="ax">${h(ax.slice(0,2).join('；'))}</span>`:''}
     </span>
   </button>`;
@@ -1453,7 +1495,7 @@ function detailHTML(p){
       <button class="iconbtn" data-pmenu aria-label="更多">
         <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="12" cy="19" r="1.8"/></svg></button>
     </div>
-    ${p.pending_op?`<div style="margin-top:8px">${opBadge(p, true)}</div>`:''}
+    ${p.pending_op?`<div style="margin-top:8px">${opBadge(p, true)}</div>${opCkHTML(p, true)}`:''}
     ${encounterCount(p)>1?`<button class="othr" data-others>同一病歷號共 ${encounterCount(p)} 次來診／住院 →</button>`:''}
     <div class="l2">
       <span class="tag mono">${h(p.mrn)||'無病歷號'}</span>
@@ -1495,6 +1537,16 @@ function openPatient(id){
         sheet.querySelectorAll('[data-edit]').forEach(b=>{
           b.onclick = ()=> openEditor(b.dataset.edit, cur, paint);
         });
+        // 三個勾選框直接在病人頁上點，不重畫整頁（免得捲動位置跳掉）
+        sheet.querySelectorAll('[data-opck]').forEach(b=>{
+          b.onclick = ()=>{
+            const k = b.dataset.opck;
+            cur.op_ck[k] = !cur.op_ck[k];
+            b.classList.toggle('on', cur.op_ck[k]);
+            b.setAttribute('aria-pressed', cur.op_ck[k]?'true':'false');
+            savePatient(cur, true);
+          };
+        });
         const pm = sheet.querySelector('[data-pmenu]');
         if(pm) pm.onclick = e=> patientMenu(e.currentTarget, cur, paint, close);
         const ob = sheet.querySelector('[data-others]');
@@ -1531,9 +1583,9 @@ function patientMenu(anchor, p, repaint, closeDetail){
       const note = await promptText('標記為待開刀', '擬行術式／時間（選填）', p.op_note||'',
         '例：08/04 Lap. cholecystectomy');
       if(note===null) return;
-      p.pending_op = true; p.op_note = note;
+      p.pending_op = true; p.op_note = note; p.op_ck = blankOpCk();
     }else{
-      p.pending_op = false;
+      p.pending_op = false; p.op_ck = blankOpCk();
     }
     await savePatient(p); repaint();
   }});
@@ -1611,7 +1663,10 @@ function summaryText(p){
   if(l2) L.push(l2);
   const d=admitDateOf(p);
   if(d) L.push((p.status==='er'?'ER since ':'Admission since ')+d+(p.dc_date?'，discharged '+p.dc_date:''));
-  if(p.pending_op) L.push('** 待開刀 / Pending operation **' + (p.op_note?'：'+p.op_note:''));
+  if(p.pending_op){
+    L.push('** 待開刀 / Pending operation **' + (p.op_note?'：'+p.op_note:''));
+    L.push('  ' + OPCK.map(c=>`[${p.op_ck&&p.op_ck[c.k]?'v':' '}] ${c.t}`).join('  '));
+  }
   const add=(t,body)=>{ if(body && body.trim()){ L.push(''); L.push('# '+t); L.push(body.trim()); } };
   add('Medical history', (p.history||[]).map(x=>{
     const t = String(x).trim();
@@ -1736,8 +1791,12 @@ const EDITORS = {
           <button type="button" data-v="1" class="${p.pending_op?'on':''}">待開刀</button>
           <button type="button" data-v="0" class="${p.pending_op?'':'on'}">否</button>
         </div>
-        <input class="inp" data-f="op_note" value="${h(p.op_note)}" placeholder="擬行術式／時間（選填，例：08/04 Lap. cholecystectomy）" style="margin-top:8px">
-        <p class="hintline">標記後卡片會排到最前面並顯示紅色「待開刀」標籤。</p></div>
+        <div id="op-extra" class="${p.pending_op?'':'hide'}">
+          <input class="inp" data-f="op_note" value="${h(p.op_note)}" placeholder="擬行術式／時間（選填，例：08/04 Lap. cholecystectomy）" style="margin-top:8px">
+          ${opCkHTML(p, true)}
+        </div>
+        <p class="hintline">標記後卡片會排到最前面並顯示紅色「待開刀」標籤，
+        並可勾選${OPCK.map(c=>'「'+c.t+'」').join('、')}三個前置項目。</p></div>
       <div class="field"><label class="lab">追蹤</label>
         <div class="seg" data-seg="tracking">
           <button type="button" data-v="1" class="${p.tracking?'on':''}">持續追蹤</button>
@@ -1748,7 +1807,16 @@ const EDITORS = {
       root.querySelectorAll('[data-seg]').forEach(seg=>{
         seg.querySelectorAll('button').forEach(b=> b.onclick = ()=>{
           seg.querySelectorAll('button').forEach(x=>x.classList.remove('on')); b.classList.add('on');
+          // 沒有要開刀就不用問術式和那三個前置項目
+          if(seg.dataset.seg==='pending_op'){
+            root.querySelector('#op-extra').classList.toggle('hide', b.dataset.v!=='1');
+          }
         });
+      });
+      root.querySelectorAll('[data-opck]').forEach(b=> b.onclick = ()=>{
+        const on = !b.classList.contains('on');
+        b.classList.toggle('on', on);
+        b.setAttribute('aria-pressed', on?'true':'false');
       });
     },
     collect(root, p){
@@ -1758,6 +1826,11 @@ const EDITORS = {
       const seg = n => { const b = root.querySelector(`[data-seg="${n}"] button.on`); return b?b.dataset.v:''; };
       p.sex = seg('sex'); p.status = seg('status')||'er'; p.tracking = seg('tracking')==='1';
       p.pending_op = seg('pending_op')==='1';
+      p.op_ck = OPCK.reduce((a,c)=>{
+        const b = root.querySelector(`[data-opck="${c.k}"]`);
+        a[c.k] = p.pending_op && !!(b && b.classList.contains('on'));
+        return a;
+      }, {});
       if(p.status==='ward' && !p.adm_date) p.adm_date = p.er_date || todayStr();
       if(!p.name && !p.mrn) return '至少要填病歷號或姓名';
     }
@@ -2131,6 +2204,10 @@ function mergePatient(dst, src){
   simple.forEach(k=>{ if(src[k]!=null && src[k]!=='') dst[k]=src[k]; });
   if(typeof src.tracking === 'boolean') dst.tracking = src.tracking;
   if(typeof src.pending_op === 'boolean') dst.pending_op = src.pending_op;
+  if(src.op_ck && typeof src.op_ck === 'object'){
+    dst.op_ck = dst.op_ck || blankOpCk();
+    OPCK.forEach(c=>{ if(typeof src.op_ck[c.k] === 'boolean') dst.op_ck[c.k] = src.op_ck[c.k]; });
+  }
   ['history','assessment','plan'].forEach(k=>{ if(Array.isArray(src[k]) && src[k].length) dst[k]=src[k]; });
   if(src.pi){
     dst.pi = dst.pi||{symptoms:{},signs:{},npo_since:'',text:''};
