@@ -170,11 +170,11 @@ main{padding:14px 0 96px}
 .opck-b.on .bx{background:var(--accent);border-color:var(--accent)}
 .opck-b.on .bx svg{opacity:1}
 button.opck-b:hover{border-color:#C9BFA8}
-/* 卡片上的縮小版：只是狀態顯示，不能點 */
-.opck.mini{gap:5px;margin-top:6px}
-.opck.mini .opck-b{font-size:11.5px;font-weight:500;padding:3px 8px 3px 5px}
-.opck.mini .opck-b .bx{width:13px;height:13px;border-radius:4px}
-.opck.mini .opck-b .bx svg{width:8px;height:8px}
+/* 卡片上的縮小版：不畫勾勾也不能點，只用亮燈（實心）／熄燈（灰底）區分 */
+.opck.mini{gap:5px;margin-top:7px}
+.opck.mini .opck-b{font-size:11.5px;font-weight:600;padding:4px 10px;
+  background:var(--bg2);border-color:transparent;color:#A79E8D}
+.opck.mini .opck-b.on{background:var(--accent);border-color:var(--accent);color:#fff}
 .pt .r0{display:block;margin:0 0 6px}
 .pt.op{border-color:#E3BDB5;background:linear-gradient(180deg,#FDF3F0 0%,var(--card) 46%)}
 .pt.op .bar{background:var(--danger) !important}
@@ -531,6 +531,8 @@ input.refn{width:58px;height:28px;padding:0 6px;font-family:var(--mono);
   .opck-b.on{border-color:#4E6656}
   .opck-b.on .bx svg{color:#17140F}
   button.opck-b:hover{border-color:#4A4238}
+  .opck.mini .opck-b{background:#2A2621;color:#8C8375}
+  .opck.mini .opck-b.on{background:var(--accent);border-color:var(--accent);color:#17140F}
   .fab{box-shadow:0 6px 20px rgba(0,0,0,.5)}
 }
 </style>
@@ -1130,7 +1132,8 @@ function opBadge(p, big){
   return `<span class="opb${big?' big':''}">${svgIcon(ICO.knife,1.9)}待開刀${
     p.op_note?`<em>${h(p.op_note)}</em>`:''}</span>`;
 }
-/* 三個小勾選框：live=true 是病人頁上可以直接點的版本，false 是卡片上的唯讀縮小版
+/* 三個小勾選框：live=true 是病人頁上可以直接點的版本，有勾選框；
+   false 是卡片上的唯讀縮小版，只用亮燈／熄燈表示，不畫勾勾
    （卡片本身是 <button>，裡面不能再放 button） */
 function opCkHTML(p, live){
   const ck = p.op_ck || {};
@@ -1138,7 +1141,8 @@ function opCkHTML(p, live){
   return `<${live?'div':'span'} class="opck${live?'':' mini'}">${OPCK.map(c=>
     `<${tag} class="opck-b${ck[c.k]?' on':''}"${live
       ? ` type="button" data-opck="${c.k}" aria-pressed="${ck[c.k]?'true':'false'}"`
-      : ''}><span class="bx">${svgIcon(ICO.check,3)}</span>${c.t}</${tag}>`).join('')}</${live?'div':'span'}>`;
+      : ` aria-label="${c.t}${ck[c.k]?'已完成':'未完成'}"`
+    }>${live?`<span class="bx">${svgIcon(ICO.check,3)}</span>`:''}${c.t}</${tag}>`).join('')}</${live?'div':'span'}>`;
 }
 function cardHTML(p){
   const dc = p.dc_date ? `<span class="tag off">出院 ${fmtDate(p.dc_date)}</span>` : '';
@@ -2480,7 +2484,7 @@ function aboutSheet(){
 /* =========================================================================
  *  帳號 / 解鎖流程
  * ========================================================================= */
-const APPVER = '1.10.0';
+const APPVER = '1.10.1';
 function show(id){
   ['scr-setup','scr-auth','scr-lock','app'].forEach(x=> $('#'+x).classList.toggle('hide', x!==id));
 }
