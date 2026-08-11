@@ -352,12 +352,15 @@ table.gt .stick{position:sticky;left:0;background:var(--card);z-index:1;
  * 檢驗有五十幾列，所以不折行改成單行截斷——項目名稱先被看到，單位才被切，
  * 完整文字放在 title 裡。數值欄不受影響。 */
 table.gt tbody td.stick{max-width:min(42vw,168px);overflow:hidden;text-overflow:ellipsis}
-/* 檢驗表的項目名稱再收緊一點，省下來的寬度留給時間欄；超過就截斷，
- * 整張表本來就能左右滑（.tscroll），完整名稱按住／滑鼠移上去看 title。
+/* 檢驗表的項目名稱上限＝「plasmacell %」剛好放得下（文字 92.5px + 左右 padding 20px，
+ * 取 116px 留一點餘裕給不同裝置的字體寬度）。省下來的寬度留給時間欄；
+ * 超過就截斷成 …，整張表本來就能左右滑（.tscroll），完整名稱看 title。
  * 生命徵象的第一欄是時間戳，不套這條，免得被切掉。 */
-table.gt.lab .stick{max-width:min(38vw,144px)}
+table.gt.lab .stick{max-width:116px}
 table.gt.lab thead .stick{overflow:hidden;text-overflow:ellipsis}
 table.gt.lab td.stick .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* 編輯頁那格前面多一顆刪除鈕（22px＋5px gap），加回去才裝得下一樣長的名稱 */
+#lb-grid.gt.lab .stick{max-width:143px}
 table.gt thead .stick{background:var(--card2);z-index:3}
 table.gt tbody tr:nth-child(even) td{background:var(--card2)}
 table.gt tbody tr:nth-child(even) .stick{background:var(--card2)}
@@ -2506,7 +2509,7 @@ function aboutSheet(){
 /* =========================================================================
  *  帳號 / 解鎖流程
  * ========================================================================= */
-const APPVER = '1.11.1';
+const APPVER = '1.11.2';
 function show(id){
   ['scr-setup','scr-auth','scr-lock','app'].forEach(x=> $('#'+x).classList.toggle('hide', x!==id));
 }
