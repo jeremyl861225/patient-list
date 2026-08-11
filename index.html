@@ -340,6 +340,16 @@ ul.lines.hx li.sub::before{content:"–";left:17px;top:0;width:auto;height:auto;
   border-radius:0 0 var(--r-md) var(--r-md)}
 .tscroll::-webkit-scrollbar{height:7px}
 .tscroll::-webkit-scrollbar-thumb{background:#DCD2BE;border-radius:99px}
+/* 檢驗表的時間列凍結在上方。position:sticky 只認得「最近的捲動容器」，
+ * 而 .tscroll 本來沒有高度上限、永遠不會垂直捲動，thead 的 sticky 等於沒作用
+ * （會直接跟著頁面捲走）。給一個高度上限，它才變成真正的垂直捲動區，
+ * 時間列就會固定在上緣；捲到表格底之後繼續滑，整塊連同表頭一起離開＝解除凍結。
+ * 列數不多、塞得下時不會出現內捲，看起來跟以前一樣。
+ * .vfreeze 由 fitTables() 量過真的需要才加。 */
+/* overscroll-behavior 維持預設的 auto：捲到表格底之後，手勢要能接著帶動整個頁面，
+ * 不然就變成卡在表格裡出不去了。 */
+.tscroll.vfreeze{max-height:min(58dvh,520px);overflow-y:auto}
+.tscroll.vfreeze::-webkit-scrollbar{width:7px}
 table.gt{border-collapse:separate;border-spacing:0;font-size:13px;width:max-content;min-width:100%}
 table.gt th,table.gt td{padding:7px 10px;text-align:left;white-space:nowrap;
   border-bottom:1px solid var(--line-soft)}
@@ -1450,10 +1460,18 @@ function vitalsHTML(p){
 const CAP_FROM = 640;
 function fitTables(root){
   (root||document).querySelectorAll('.tscroll > table.gt').forEach(t=>{
+    const wrap = t.parentElement;
     t.classList.remove('capped');
-    if(window.innerWidth >= CAP_FROM) return;
-    const wrap = t.parentElement;                 // 讀 scrollWidth 會強制重排，量到的是沒限寬的結果
-    if(wrap.scrollWidth > wrap.clientWidth + 1) t.classList.add('capped');
+    wrap.classList.remove('vfreeze');
+    // 讀 scrollWidth 會強制重排，所以量到的是「沒限寬」的自然寬度
+    if(window.innerWidth < CAP_FROM && wrap.scrollWidth > wrap.clientWidth + 1) t.classList.add('capped');
+    // 檢驗表列數多到一個畫面放不下時，才把時間列凍結起來（編輯頁的表格不套，
+    // 那裡新增項目是往下長的，內捲會讓剛加的那列跑到看不到的地方）。
+    // 先加上去量，真的不會捲就拿掉——門檻直接沿用 CSS 的 max-height，不另外寫一份。
+    if(t.classList.contains('labtb') && t.id !== 'lb-grid'){
+      wrap.classList.add('vfreeze');
+      if(wrap.scrollHeight <= wrap.clientHeight + 1) wrap.classList.remove('vfreeze');
+    }
   });
 }
 window.addEventListener('resize', ()=> fitTables());
@@ -2527,7 +2545,7 @@ function aboutSheet(){
 /* =========================================================================
  *  帳號 / 解鎖流程
  * ========================================================================= */
-const APPVER = '1.12.0';
+const APPVER = '1.13.0';
 function show(id){
   ['scr-setup','scr-auth','scr-lock','app'].forEach(x=> $('#'+x).classList.toggle('hide', x!==id));
 }
