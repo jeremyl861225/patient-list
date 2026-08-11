@@ -352,6 +352,12 @@ table.gt .stick{position:sticky;left:0;background:var(--card);z-index:1;
  * 檢驗有五十幾列，所以不折行改成單行截斷——項目名稱先被看到，單位才被切，
  * 完整文字放在 title 裡。數值欄不受影響。 */
 table.gt tbody td.stick{max-width:min(42vw,168px);overflow:hidden;text-overflow:ellipsis}
+/* 檢驗表的項目名稱再收緊一點，省下來的寬度留給時間欄；超過就截斷，
+ * 整張表本來就能左右滑（.tscroll），完整名稱按住／滑鼠移上去看 title。
+ * 生命徵象的第一欄是時間戳，不套這條，免得被切掉。 */
+table.gt.lab .stick{max-width:min(38vw,144px)}
+table.gt.lab thead .stick{overflow:hidden;text-overflow:ellipsis}
+table.gt.lab td.stick .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 table.gt thead .stick{background:var(--card2);z-index:3}
 table.gt tbody tr:nth-child(even) td{background:var(--card2)}
 table.gt tbody tr:nth-child(even) .stick{background:var(--card2)}
@@ -685,6 +691,17 @@ function daysSince(ds){
   return Math.round((b-a)/86400000);
 }
 function fmtDate(ds){ return ds ? ds.slice(5).replace('-','/') : ''; }
+/* 檢驗表頭的時間去掉年份：2026-08-03 06:00 → 08/03 06:00，2026-08-03 → 08/03。
+ * 年份佔掉的寬度比項目名稱還多，一個畫面只擠得下一欄。
+ * 欄位本身是 vals 的 key，不能動，所以只改「顯示」，完整值留在 title 裡。
+ * 「入院時」這種自己打的欄名不符合日期格式，原樣保留。 */
+function labColLabel(c){
+  const m = String(c==null?'':c).match(/^\d{4}[-/](\d{1,2})[-/](\d{1,2})(?:[T\s]+(.*))?$/);
+  if(!m) return String(c==null?'':c);
+  const md = m[1].padStart(2,'0') + '/' + m[2].padStart(2,'0');
+  const t = (m[3]||'').trim();
+  return t ? md+' '+t : md;
+}
 function fmtStamp(iso){
   const d = new Date(iso);
   if(isNaN(d)) return '';
@@ -1433,8 +1450,9 @@ function labsHTML(p){
   const L = p.labs;
   if(!L.items.length || !L.cols.length) return '';
   const cols = L.cols.slice().sort();
-  return `<div class="tscroll"><table class="gt">
-    <thead><tr><th class="stick">檢驗項目</th>${cols.map(c=>`<th>${h(c)}</th>`).join('')}</tr></thead>
+  return `<div class="tscroll"><table class="gt lab">
+    <thead><tr><th class="stick">檢驗項目</th>${cols.map(c=>
+      `<th title="${h(c)}">${h(labColLabel(c))}</th>`).join('')}</tr></thead>
     <tbody>${L.items.map(it=>{
       const ref = labRefOf(it, p.sex);
       const full = it.name + (it.unit?' ('+it.unit+')':'');
@@ -2064,7 +2082,7 @@ const EDITORS = {
           <button class="btn" id="lb-addcol" style="flex:none">加時間</button></div></div>
       <div class="field"><label class="lab">檢驗表 <span class="op">列＝項目、欄＝時間</span></label>
         <div class="tscroll" style="margin:0;border:1px solid var(--line);border-radius:var(--r-sm)">
-          <table class="gt" id="lb-grid"></table></div></div>
+          <table class="gt lab" id="lb-grid"></table></div></div>
       <div class="row"><div class="field" style="flex:2"><input class="inp" id="lb-newitem" placeholder="項目 WBC"></div>
         <div class="field"><input class="inp" id="lb-newunit" placeholder="單位 K/µL"></div>
         <div class="field" style="flex:none"><button class="btn" id="lb-additem">加項目</button></div></div>
@@ -2079,11 +2097,13 @@ const EDITORS = {
       const grid = root.querySelector('#lb-grid');
       function paint(){
         const cols = L.cols.slice().sort();
-        grid.innerHTML = `<thead><tr><th class="stick">項目</th>${cols.map(c=>`<th>${h(c)}</th>`).join('')}</tr></thead>
+        grid.innerHTML = `<thead><tr><th class="stick">項目</th>${cols.map(c=>
+            `<th title="${h(c)}">${h(labColLabel(c))}</th>`).join('')}</tr></thead>
           <tbody>${L.items.map((it,i)=>`<tr>
-            <td class="stick"><div style="display:flex;align-items:center;gap:5px">
+            <td class="stick" title="${h(it.name+(it.unit?' ('+it.unit+')':''))}">
+              <div style="display:flex;align-items:center;gap:5px">
               <button class="del" data-rmitem="${i}" style="width:22px;height:22px">${svgIcon(ICO.x,2.4)}</button>
-              <span>${h(it.name)}${it.unit?`<span class="u">${h(it.unit)}</span>`:''}</span></div></td>
+              <span class="nm">${h(it.name)}${it.unit?`<span class="u">${h(it.unit)}</span>`:''}</span></div></td>
             ${cols.map(c=>`<td><input class="inp mini" style="width:96px;height:30px;padding:0 7px"
                data-cell data-k="${h(it.name+'|'+c)}" value="${h(L.vals[it.name+'|'+c]||'')}"></td>`).join('')}
           </tr>`).join('') || `<tr><td class="stick" style="color:var(--muted)">尚無項目</td></tr>`}</tbody>`;
@@ -2485,7 +2505,7 @@ function aboutSheet(){
 /* =========================================================================
  *  帳號 / 解鎖流程
  * ========================================================================= */
-const APPVER = '1.10.2';
+const APPVER = '1.11.0';
 function show(id){
   ['scr-setup','scr-auth','scr-lock','app'].forEach(x=> $('#'+x).classList.toggle('hide', x!==id));
 }
