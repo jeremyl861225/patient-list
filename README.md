@@ -19,7 +19,7 @@
 - **九個欄位**：Medical history／Present illness／Medication／Vital signs／Lab data／Image・Exam／Assessment／Plan／Note。
 - **Present illness 結構化輸入**：勾選症狀（發燒、噁心、嘔吐、腹痛〔可填位置與 persistent／intermittent／progressive／resolving〕、腹瀉、倦怠、嗜睡、血便、黑便、未解便、腹脹）並各自填天數，NPO since，以及十三項理學檢查（Murphy／McBurney／Rovsing／Obturator／Psoas／Carnett／CV knocking／Brudzinski／Kernig／腹部壓痛／反彈痛〔皆可填位置與 mild・moderate・severe〕／肌肉緊繃／腹壁僵硬）與 bowel sound。勾選後即時產生英文敘述。
 - **Medication**：藥名、途徑（PO／IV／IF）、劑量、頻率、hold 日期，IF 另有流速欄。
-- **Vital signs**：T／P／R／BP／SpO₂（含 O₂ demand）／GCS／自由備註，依時間點列表。
+- **Vital signs**：T／P／R／BP／SpO₂（含 O₂ demand）／GCS／自由備註，依時間點列表（時間只顯示月／日與時間，年份省略）。
 - **Image / Exam**：類型可自行輸入（EKG／CXR／Echo／CT／EGD／CFS／MRI／PET 是建議值，US、MRCP、ERCP… 都能自己打），加日期、標題與 findings。
 - **Lab data**：欄＝時間、列＝檢驗項目的表格，過寬時整塊橫向捲動、第一欄固定；可貼上檢驗報告文字自動帶入。表頭的時間只顯示月／日與時間（年份省略），項目名稱超過寬度上限會截斷成 `…`，完整名稱與完整時間都放在 title 裡。
 - **檢驗值自動判讀**：兩層。**參考值**決定 `H`／`L`（淡色）、**危險值**決定 `HH`／`LL`（實心底色，

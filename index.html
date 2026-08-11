@@ -691,11 +691,12 @@ function daysSince(ds){
   return Math.round((b-a)/86400000);
 }
 function fmtDate(ds){ return ds ? ds.slice(5).replace('-','/') : ''; }
-/* 檢驗表頭的時間去掉年份：2026-08-03 06:00 → 08/03 06:00，2026-08-03 → 08/03。
- * 年份佔掉的寬度比項目名稱還多，一個畫面只擠得下一欄。
- * 欄位本身是 vals 的 key，不能動，所以只改「顯示」，完整值留在 title 裡。
+/* 表格裡的時間去掉年份：2026-08-03 06:00 → 08/03 06:00，2026-08-03 → 08/03。
+ * 檢驗與生命徵象都用得到；年份佔掉的寬度比檢驗項目名稱還多，一個畫面只擠得下一欄。
+ * 這些字串同時是資料的 key（檢驗）或排序依據（生命徵象），不能動，
+ * 所以只改「顯示」，完整值留在 title 裡。
  * 「入院時」這種自己打的欄名不符合日期格式，原樣保留。 */
-function labColLabel(c){
+function shortStamp(c){
   const m = String(c==null?'':c).match(/^\d{4}[-/](\d{1,2})[-/](\d{1,2})(?:[T\s]+(.*))?$/);
   if(!m) return String(c==null?'':c);
   const md = m[1].padStart(2,'0') + '/' + m[2].padStart(2,'0');
@@ -1434,7 +1435,7 @@ function vitalsHTML(p){
   return `<div class="tscroll"><table class="gt">
     <thead><tr><th class="stick">時間</th><th>T (°C)</th><th>P</th><th>R</th><th>BP</th><th>SpO₂</th><th>O₂</th><th>GCS</th><th>備註</th></tr></thead>
     <tbody>${rows.map(v=>`<tr>
-      <td class="stick">${h(v.t||'')}</td>
+      <td class="stick" title="${h(v.t||'')}">${h(shortStamp(v.t||''))}</td>
       ${VITAL_KEYS.map(k=>v[k]?`<td class="v">${h(v[k])}</td>`:'<td class="na">–</td>').join('')}
     </tr>`).join('')}</tbody></table></div>`;
 }
@@ -1452,7 +1453,7 @@ function labsHTML(p){
   const cols = L.cols.slice().sort();
   return `<div class="tscroll"><table class="gt lab">
     <thead><tr><th class="stick">檢驗項目</th>${cols.map(c=>
-      `<th title="${h(c)}">${h(labColLabel(c))}</th>`).join('')}</tr></thead>
+      `<th title="${h(c)}">${h(shortStamp(c))}</th>`).join('')}</tr></thead>
     <tbody>${L.items.map(it=>{
       const ref = labRefOf(it, p.sex);
       const full = it.name + (it.unit?' ('+it.unit+')':'');
@@ -2098,7 +2099,7 @@ const EDITORS = {
       function paint(){
         const cols = L.cols.slice().sort();
         grid.innerHTML = `<thead><tr><th class="stick">項目</th>${cols.map(c=>
-            `<th title="${h(c)}">${h(labColLabel(c))}</th>`).join('')}</tr></thead>
+            `<th title="${h(c)}">${h(shortStamp(c))}</th>`).join('')}</tr></thead>
           <tbody>${L.items.map((it,i)=>`<tr>
             <td class="stick" title="${h(it.name+(it.unit?' ('+it.unit+')':''))}">
               <div style="display:flex;align-items:center;gap:5px">
@@ -2505,7 +2506,7 @@ function aboutSheet(){
 /* =========================================================================
  *  帳號 / 解鎖流程
  * ========================================================================= */
-const APPVER = '1.11.0';
+const APPVER = '1.11.1';
 function show(id){
   ['scr-setup','scr-auth','scr-lock','app'].forEach(x=> $('#'+x).classList.toggle('hide', x!==id));
 }
